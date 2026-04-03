@@ -9,7 +9,7 @@
 #                https://code.visualstudio.com/api/working-with-extensions/publishing-extension#publishing-extensions
 #   OVSX_PAT   — Open VSX access token from https://open-vsx.org/ (Profile → Access Tokens)
 #
-# Ensure package.json "publisher" matches your VS Marketplace / Open VSX publisher id (not "local").
+# Ensure package.json "publisher" matches your VS Marketplace id and Open VSX namespace (e.g. Suit-Ji).
 # Adjust `branches` below if your default branch is not main/master.
 
 name: Release
