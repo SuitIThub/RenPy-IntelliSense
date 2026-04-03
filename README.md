@@ -1,5 +1,9 @@
 # Ren'Py Documentation Hover
 
+[![Release workflow](https://github.com/SuitIThub/RenPy-IntelliSense/actions/workflows/release.yml/badge.svg)](https://github.com/SuitIThub/RenPy-IntelliSense/actions/workflows/release.yml)
+[![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.85.0-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
+[![GitHub release](https://img.shields.io/github/v/release/SuitIThub/RenPy-IntelliSense?logo=github&label=release)](https://github.com/SuitIThub/RenPy-IntelliSense/releases)
+
 VS Code / Cursor extension for `.rpy` / `.rpym` files: hovers show **your** docstrings when present, plus optional excerpts and links from the [official Ren'Py manual](https://www.renpy.org/doc/html/) for engine symbols.
 
 ---
