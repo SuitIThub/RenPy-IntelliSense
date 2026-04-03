@@ -1,0 +1,193 @@
+# Tagless release: bump "version" in package.json, commit, and push to the default branch.
+# Pipeline: gate → build → release-github (uses GITHUB_TOKEN only) →
+#   (verify-vscode | verify-openvsx) in parallel → (publish-vscode | publish-openvsx) in parallel.
+# GitHub Release runs before PAT checks so the .vsix is on GitHub even if marketplace tokens fail.
+#
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   VSCE_PAT   — Azure DevOps Personal Access Token with Marketplace (Manage) scope
+#                https://code.visualstudio.com/api/working-with-extensions/publishing-extension#publishing-extensions
+#   OVSX_PAT   — Open VSX access token from https://open-vsx.org/ (Profile → Access Tokens)
+#
+# Ensure package.json "publisher" matches your VS Marketplace / Open VSX publisher id (not "local").
+# Adjust `branches` below if your default branch is not main/master.
+
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'package.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.meta.outputs.skip }}
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      publisher: ${{ steps.meta.outputs.publisher }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Resolve version and release gate
+        id: meta
+        run: |
+          set -e
+          VERSION="$(node -p "require('./package.json').version")"
+          PUBLISHER="$(node -p "require('./package.json').publisher")"
+          if [ -z "$VERSION" ]; then
+            echo "::error::package.json version is empty"
+            exit 1
+          fi
+          if [ -z "$PUBLISHER" ]; then
+            echo "::error::package.json publisher is empty"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          echo "version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "tag=${TAG}" >> "${GITHUB_OUTPUT}"
+          echo "publisher=${PUBLISHER}" >> "${GITHUB_OUTPUT}"
+
+          git fetch --tags origin 2>/dev/null || true
+          if git show-ref --verify --quiet "refs/tags/${TAG}"; then
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+            echo "Tag ${TAG} already exists — skipping downstream jobs."
+          else
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Skip notice
+        if: steps.meta.outputs.skip == 'true'
+        run: echo "No downstream jobs will run (tag already exists)."
+
+  build:
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npm run compile
+
+      - name: Package .vsix
+        run: npx --yes @vscode/vsce package --out extension.vsix
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-vsix
+          path: extension.vsix
+          if-no-files-found: error
+
+  release-github:
+    needs: [gate, build]
+    if: needs.gate.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-vsix
+          path: vsix
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.gate.outputs.tag }}
+          name: ${{ needs.gate.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          files: vsix/extension.vsix
+          generate_release_notes: true
+
+  verify-vscode:
+    needs: [gate, release-github]
+    if: needs.gate.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify Visual Studio Marketplace PAT
+        run: npx --yes @vscode/vsce verify-pat "${{ needs.gate.outputs.publisher }}"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+  verify-openvsx:
+    needs: [gate, release-github]
+    if: needs.gate.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Verify Open VSX PAT
+        run: npx --yes ovsx verify-pat "${{ needs.gate.outputs.publisher }}"
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
+  publish-vscode:
+    needs: [gate, build, verify-vscode]
+    if: needs.gate.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-vsix
+          path: vsix
+
+      - name: Publish to Visual Studio Marketplace
+        run: npx --yes @vscode/vsce publish --packagePath vsix/extension.vsix
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+  publish-openvsx:
+    needs: [gate, build, verify-openvsx]
+    if: needs.gate.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download VSIX artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-vsix
+          path: vsix
+
+      - name: Publish to Open VSX Registry
+        run: npx --yes ovsx publish vsix/extension.vsix
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
