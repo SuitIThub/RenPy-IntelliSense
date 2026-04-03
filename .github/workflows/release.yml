@@ -1,4 +1,5 @@
-# Tagless release: bump "version" in package.json, commit, and push to the default branch.
+# Tagless release: runs on every push to the default branch, or manually (Actions → Release → Run workflow).
+# Bump "version" in package.json when you want a new release; the gate skips if tag v<version> already exists.
 # Pipeline: gate → build → release-github (uses GITHUB_TOKEN only) →
 #   (verify-vscode | verify-openvsx) in parallel → (publish-vscode | publish-openvsx) in parallel.
 # GitHub Release runs before PAT checks so the .vsix is on GitHub even if marketplace tokens fail.
@@ -18,8 +19,7 @@ on:
     branches:
       - main
       - master
-    paths:
-      - 'package.json'
+  workflow_dispatch:
 
 permissions:
   contents: write
