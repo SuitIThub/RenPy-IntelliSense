@@ -24,7 +24,9 @@
   "files": [
     "out/**/*.js",
     "data/doc-index.json",
-    "Ren'Py.png"
+    "Ren'Py.png",
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "contributes": {
     "commands": [

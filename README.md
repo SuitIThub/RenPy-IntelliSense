@@ -8,6 +8,8 @@
 
 VS Code / Cursor extension for `.rpy` / `.rpym` files: hovers show **your** docstrings when present, plus optional excerpts and links from the [official Ren'Py manual](https://www.renpy.org/doc/html/) for engine symbols.
 
+Licensed under the [MIT License](LICENSE). Release history: [CHANGELOG](CHANGELOG.md).
+
 ---
 
 ## Building and installing
