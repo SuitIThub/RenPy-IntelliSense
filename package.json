@@ -2,7 +2,7 @@
   "name": "renpy-intellisense",
   "displayName": "Ren'Py IntelliSense",
   "description": "Shows Ren'Py official documentation in hovers for .rpy / .rpym code.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "Suit-Ji",
   "license": "MIT",
   "repository": {
@@ -20,9 +20,11 @@
     "onLanguage:python"
   ],
   "main": "./out/extension.js",
+  "icon": "Ren'Py.png",
   "files": [
     "out/**/*.js",
-    "data/doc-index.json"
+    "data/doc-index.json",
+    "Ren'Py.png"
   ],
   "contributes": {
     "commands": [
