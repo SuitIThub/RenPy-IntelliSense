@@ -8,7 +8,7 @@ import { extractDocstringAfterDefinition, extractDocstringBeforeDefinition, stri
 import type { DefKind } from "./localDefinitions";
 
 /** Kinds that support comment-above-line as docstring (variable initializations) */
-const VARIABLE_KINDS: Set<DefKind> = new Set(["define", "default", "variable"]);
+const VARIABLE_KINDS: Set<DefKind> = new Set(["define", "default", "variable", "variable_local"]);
 
 export interface IndexedSymbol {
   /** e.g. "FragmentStorage.add_event", "Outer.Inner" */
@@ -36,6 +36,8 @@ const PATTERNS: { kind: DefKind; re: RegExp }[] = [
   { kind: "screen", re: /^\s*screen\s+(\w+)\s*(?:\([^)]*\))?\s*:/ },
   { kind: "transform", re: /^\s*transform\s+(\w+)\s*(?:\([^)]*\))?\s*:/ },
   { kind: "image", re: /^\s*image\s+(\w+)/ },
+  // Ren'Py inline Python assignment in script scope (local to the scope)
+  { kind: "variable_local", re: /^\s*\$\s*(\w+)\s*=(?!=)/ },
   // Plain Python variable assignment (must be last to not shadow other patterns)
   { kind: "variable", re: /^\s*(\w+)\s*=(?!=)/ },
 ];

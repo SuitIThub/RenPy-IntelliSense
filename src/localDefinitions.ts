@@ -14,7 +14,8 @@ export type DefKind =
   | "screen"
   | "transform"
   | "image"
-  | "variable";
+  | "variable"
+  | "variable_local";
 
 export interface LocalDefinition {
   name: string;
@@ -38,12 +39,14 @@ const DEF_PATTERNS: { kind: DefKind; re: RegExp }[] = [
   { kind: "screen", re: /^\s*screen\s+(\w+)\s*(?:\([^)]*\))?\s*:/ },
   { kind: "transform", re: /^\s*transform\s+(\w+)\s*(?:\([^)]*\))?\s*:/ },
   { kind: "image", re: /^\s*image\s+(\w+)/ },
+  // Ren'Py inline Python assignment in script scope (local to the scope)
+  { kind: "variable_local", re: /^\s*\$\s*(\w+)\s*=(?!=)/ },
   // Plain Python variable assignment (must be last to not shadow other patterns)
   { kind: "variable", re: /^\s*(\w+)\s*=(?!=)/ },
 ];
 
 /** Kinds that support comment-above-line as docstring (variable initializations) */
-const VARIABLE_KINDS: Set<DefKind> = new Set(["define", "default", "variable"]);
+const VARIABLE_KINDS: Set<DefKind> = new Set(["define", "default", "variable", "variable_local"]);
 
 export function scanLocalDefinitions(text: string): LocalDefinition[] {
   const lines = text.split(/\r?\n/);
@@ -110,6 +113,15 @@ export function definitionForSymbolAtLine(
 ): LocalDefinition | null {
   const candidates = defs.filter((d) => symbolMatchesDefinition(d, symbol));
   if (candidates.length === 0) return null;
+
+  // `$ var = ...` should resolve locally (nearest previous in current file scope),
+  // not to the first assignment in the file.
+  let bestLocal: LocalDefinition | null = null;
+  for (const d of candidates) {
+    if (d.kind !== "variable_local" || d.line > atLine) continue;
+    if (!bestLocal || d.line > bestLocal.line) bestLocal = d;
+  }
+  if (bestLocal) return bestLocal;
 
   // For variable-like symbols, show the original initialization instead of
   // later reassignments/overwrites.

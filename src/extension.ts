@@ -103,7 +103,10 @@ export function activate(context: vscode.ExtensionContext): void {
           const sig = extractDefinitionSignature(linesSplit, localDef.line, localDef.kind);
           const sigBlock = sig ? ["```python", sig, "```"].join("\n") : "";
           const preserveVariableCommentLines =
-            localDef.kind === "variable" || localDef.kind === "define" || localDef.kind === "default";
+            localDef.kind === "variable" ||
+            localDef.kind === "variable_local" ||
+            localDef.kind === "define" ||
+            localDef.kind === "default";
           const localRawForMarkdown =
             preserveVariableCommentLines && localRaw ? localRaw.replace(/\n/g, "  \n") : localRaw;
           const docPart =
@@ -137,7 +140,9 @@ export function activate(context: vscode.ExtensionContext): void {
         if (localDef) {
           const t = escapeMarkdownLinkLabel(symbol);
           const href = makeOpenDefinitionCommandLink(document.uri, localDef.line);
-          md.appendMarkdown(`### [${t}](${href})\n\n`);
+          const relPath = vscode.workspace.asRelativePath(document.uri, false).replace(/\\/g, "/");
+          const locLabel = escapeMarkdownLinkLabel(`${relPath}:${localDef.line + 1}`);
+          md.appendMarkdown(`## [${t}](${href})\n\n<sub>${locLabel}</sub>\n\n`);
         } else {
           md.appendMarkdown(`### ${symbol}\n\n`);
         }

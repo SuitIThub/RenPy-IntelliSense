@@ -212,7 +212,7 @@ export function extractDefinitionSignature(
     return trimJoin(firstLine);
   }
 
-  if (kind === "variable" || kind === "define" || kind === "default") {
+  if (kind === "variable" || kind === "variable_local" || kind === "define" || kind === "default") {
     return extractAssignmentSignature(lines, startLine, max);
   }
 

@@ -5,6 +5,16 @@ All notable changes to **Ren'Py IntelliSense** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-04-25
+
+### Added
+
+- **Ren'Py `$` script assignments**: Lines like `$ var1 = 1` are indexed as local variable definitions. Hover and docstring detection treat comment blocks above them like other variable-like definitions, and resolution prefers the nearest previous `$` assignment in the file (not the first global-style assignment elsewhere).
+
+### Changed
+
+- **Hover header layout**: The clickable symbol in local-definition hovers uses a larger heading (`##`), with relative file path and line number shown on a smaller subtitle line underneath.
+
 ## [1.1.1] - 2026-04-25
 
 ### Fixed
