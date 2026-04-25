@@ -5,6 +5,19 @@ All notable changes to **Ren'Py IntelliSense** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-04-25
+
+### Fixed
+
+- Variable hover now prefers the original initialization for variable-like symbols and no longer includes unrelated later assignments.
+- Multi-line `#` comment blocks above variable-like definitions are now rendered as separate lines in hover output.
+- Signature help now correctly handles commas inside nested type/default expressions (for example `Dict[str, EventStorage]`) when splitting and highlighting parameters.
+- Signature help now resolves ambiguous callees more reliably by falling back to nearest local and indexed candidates when unique global resolution is unavailable.
+- Signature help now maps keyword arguments to the correct formal parameter even when `*args` appears earlier in the signature.
+- Active parameter detection now works reliably when the cursor is inside an already written call (including cursor positions inside keyword names and around `=`).
+- Signature argument binding was refactored to a structured parser/matcher for formal vs call arguments, improving accuracy across mixed positional and keyword argument calls.
+- Signature help now supports nested calls by returning a signature stack for all currently open calls, with the innermost call marked as active.
+
 ## [1.1.0] - 2026-04-25
 
 ### Added

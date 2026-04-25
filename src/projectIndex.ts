@@ -65,6 +65,14 @@ export class ProjectIndex {
     return this.byFile.get(uri.fsPath) ?? [];
   }
 
+  getSymbolsBySimpleName(name: string): IndexedSymbol[] {
+    return this.bySimple.get(name) ?? [];
+  }
+
+  getSymbolsByQualifiedName(name: string): IndexedSymbol[] {
+    return this.byQualified.get(name) ?? [];
+  }
+
   createCrossRefResolver(): (name: string) => { uri: vscode.Uri; line: number } | undefined {
     return (name: string) => {
       const s = this.resolve(name);

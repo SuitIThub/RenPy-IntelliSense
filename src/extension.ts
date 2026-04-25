@@ -100,11 +100,15 @@ export function activate(context: vscode.ExtensionContext): void {
         const linesSplit = fullText.split(/\r?\n/);
         const localRaw = localDef?.docstring?.trim();
         if (localDef) {
-          const sig = extractDefinitionSignature(linesSplit, localDef.line);
+          const sig = extractDefinitionSignature(linesSplit, localDef.line, localDef.kind);
           const sigBlock = sig ? ["```python", sig, "```"].join("\n") : "";
+          const preserveVariableCommentLines =
+            localDef.kind === "variable" || localDef.kind === "define" || localDef.kind === "default";
+          const localRawForMarkdown =
+            preserveVariableCommentLines && localRaw ? localRaw.replace(/\n/g, "  \n") : localRaw;
           const docPart =
-            preferLocal && localRaw
-              ? formatDocstringToMarkdown(localRaw, { resolveCrossRef })
+            preferLocal && localRawForMarkdown
+              ? formatDocstringToMarkdown(localRawForMarkdown, { resolveCrossRef })
               : "";
           localMd = [sigBlock, docPart].filter(Boolean).join("\n\n");
         }

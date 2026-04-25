@@ -108,9 +108,24 @@ export function definitionForSymbolAtLine(
   symbol: string,
   atLine: number
 ): LocalDefinition | null {
+  const candidates = defs.filter((d) => symbolMatchesDefinition(d, symbol));
+  if (candidates.length === 0) return null;
+
+  // For variable-like symbols, show the original initialization instead of
+  // later reassignments/overwrites.
+  const variableLike = candidates.filter((d) =>
+    d.kind === "variable" || d.kind === "define" || d.kind === "default"
+  );
+  if (variableLike.length > 0) {
+    let first = variableLike[0]!;
+    for (const d of variableLike) {
+      if (d.line < first.line) first = d;
+    }
+    return first;
+  }
+
   let best: LocalDefinition | null = null;
-  for (const d of defs) {
-    if (!symbolMatchesDefinition(d, symbol)) continue;
+  for (const d of candidates) {
     if (d.line > atLine) continue;
     if (!best || d.line > best.line) best = d;
   }
