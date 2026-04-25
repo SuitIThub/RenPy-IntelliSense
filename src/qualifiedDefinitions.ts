@@ -4,8 +4,11 @@
  */
 
 import type { Uri } from "vscode";
-import { extractDocstringAfterDefinition, stripInvisibleLeading } from "./docstringExtract";
+import { extractDocstringAfterDefinition, extractDocstringBeforeDefinition, stripInvisibleLeading } from "./docstringExtract";
 import type { DefKind } from "./localDefinitions";
+
+/** Kinds that support comment-above-line as docstring (variable initializations) */
+const VARIABLE_KINDS: Set<DefKind> = new Set(["define", "default", "variable"]);
 
 export interface IndexedSymbol {
   /** e.g. "FragmentStorage.add_event", "Outer.Inner" */
@@ -33,6 +36,8 @@ const PATTERNS: { kind: DefKind; re: RegExp }[] = [
   { kind: "screen", re: /^\s*screen\s+(\w+)\s*(?:\([^)]*\))?\s*:/ },
   { kind: "transform", re: /^\s*transform\s+(\w+)\s*(?:\([^)]*\))?\s*:/ },
   { kind: "image", re: /^\s*image\s+(\w+)/ },
+  // Plain Python variable assignment (must be last to not shadow other patterns)
+  { kind: "variable", re: /^\s*(\w+)\s*=(?!=)/ },
 ];
 
 function leadingIndentCols(line: string): number {
@@ -64,6 +69,15 @@ export function indexedSymbolsToLocalDefinitions(
   }));
 }
 
+/** Extract docstring for a definition, checking above for variable kinds first */
+function extractDocstringForKind(lines: string[], lineIdx: number, kind: DefKind): string | null {
+  if (VARIABLE_KINDS.has(kind)) {
+    const before = extractDocstringBeforeDefinition(lines, lineIdx);
+    if (before !== null) return before;
+  }
+  return extractDocstringAfterDefinition(lines, lineIdx);
+}
+
 export function scanQualifiedDefinitions(text: string, uri: Uri): IndexedSymbol[] {
   const lines = text.split(/\r?\n/);
   const out: IndexedSymbol[] = [];
@@ -82,7 +96,7 @@ export function scanQualifiedDefinitions(text: string, uri: Uri): IndexedSymbol[
       if (!m?.[1]) continue;
 
       const rawName = m[1];
-      const docstring = extractDocstringAfterDefinition(lines, i);
+      const docstring = extractDocstringForKind(lines, i, kind);
 
       if (kind === "class") {
         const name = rawName;

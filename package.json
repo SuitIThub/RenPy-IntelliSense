@@ -2,7 +2,7 @@
   "name": "renpy-intellisense",
   "displayName": "Ren'Py IntelliSense",
   "description": "Shows Ren'Py official documentation in hovers for .rpy / .rpym code.",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "publisher": "Suit-Ji",
   "license": "MIT",
   "repository": {

@@ -38,6 +38,70 @@ export function activeParameterAfterOpen(textFromOpenParenToCursor: string): num
   return commas;
 }
 
+/**
+ * Parse parameters from a signature string and return ParameterInformation objects
+ * with [start, end] labels for highlighting.
+ */
+function parseSignatureParameters(sig: string): vscode.ParameterInformation[] {
+  // Find the opening paren in the signature
+  const openParen = sig.indexOf("(");
+  if (openParen < 0) return [];
+
+  // Find the matching closing paren
+  let depth = 0;
+  let closeParen = -1;
+  for (let i = openParen; i < sig.length; i++) {
+    if (sig[i] === "(") depth++;
+    else if (sig[i] === ")") {
+      depth--;
+      if (depth === 0) {
+        closeParen = i;
+        break;
+      }
+    }
+  }
+  if (closeParen < 0) closeParen = sig.length;
+
+  const paramsStr = sig.slice(openParen + 1, closeParen);
+  if (!paramsStr.trim()) return [];
+
+  const params: vscode.ParameterInformation[] = [];
+  let currentStart = openParen + 1;
+  let parenDepth = 0;
+  let bracketDepth = 0;
+  let braceDepth = 0;
+
+  for (let i = 0; i < paramsStr.length; i++) {
+    const ch = paramsStr[i]!;
+    if (ch === "(") parenDepth++;
+    else if (ch === ")") parenDepth--;
+    else if (ch === "[") bracketDepth++;
+    else if (ch === "]") bracketDepth--;
+    else if (ch === "{") braceDepth++;
+    else if (ch === "}") braceDepth--;
+    else if (ch === "," && parenDepth === 0 && bracketDepth === 0 && braceDepth === 0) {
+      // End of a parameter
+      const paramEnd = openParen + 1 + i;
+      const paramText = sig.slice(currentStart, paramEnd).trim();
+      if (paramText) {
+        // Find actual start/end in the signature (trimmed positions)
+        const actualStart = sig.indexOf(paramText, currentStart);
+        params.push(new vscode.ParameterInformation([actualStart, actualStart + paramText.length]));
+      }
+      currentStart = openParen + 1 + i + 1; // Skip the comma
+    }
+  }
+
+  // Last parameter (or only parameter)
+  const lastParam = paramsStr.slice(currentStart - openParen - 1).trim();
+  if (lastParam) {
+    const actualStart = sig.indexOf(lastParam, currentStart);
+    params.push(new vscode.ParameterInformation([actualStart, actualStart + lastParam.length]));
+  }
+
+  return params;
+}
+
 export function registerRenpySignatureHelp(projectIndex: ProjectIndex): vscode.Disposable {
   return vscode.languages.registerSignatureHelpProvider(
     [{ language: "renpy" }, { language: "python" }],
@@ -69,6 +133,8 @@ export function registerRenpySignatureHelp(projectIndex: ProjectIndex): vscode.D
         const paramIdx = activeParameterAfterOpen(afterOpen);
 
         const information = new vscode.SignatureInformation(sig);
+        information.parameters = parseSignatureParameters(sig);
+
         const help = new vscode.SignatureHelp();
         help.signatures = [information];
         help.activeSignature = 0;

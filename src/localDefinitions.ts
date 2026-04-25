@@ -3,7 +3,7 @@
  * and map symbol name -> list of { definition line, docstring }.
  */
 
-import { extractDocstringAfterDefinition, stripInvisibleLeading } from "./docstringExtract";
+import { extractDocstringAfterDefinition, extractDocstringBeforeDefinition, stripInvisibleLeading } from "./docstringExtract";
 
 export type DefKind =
   | "def"
@@ -13,7 +13,8 @@ export type DefKind =
   | "default"
   | "screen"
   | "transform"
-  | "image";
+  | "image"
+  | "variable";
 
 export interface LocalDefinition {
   name: string;
@@ -37,7 +38,12 @@ const DEF_PATTERNS: { kind: DefKind; re: RegExp }[] = [
   { kind: "screen", re: /^\s*screen\s+(\w+)\s*(?:\([^)]*\))?\s*:/ },
   { kind: "transform", re: /^\s*transform\s+(\w+)\s*(?:\([^)]*\))?\s*:/ },
   { kind: "image", re: /^\s*image\s+(\w+)/ },
+  // Plain Python variable assignment (must be last to not shadow other patterns)
+  { kind: "variable", re: /^\s*(\w+)\s*=(?!=)/ },
 ];
+
+/** Kinds that support comment-above-line as docstring (variable initializations) */
+const VARIABLE_KINDS: Set<DefKind> = new Set(["define", "default", "variable"]);
 
 export function scanLocalDefinitions(text: string): LocalDefinition[] {
   const lines = text.split(/\r?\n/);
@@ -51,7 +57,16 @@ export function scanLocalDefinitions(text: string): LocalDefinition[] {
       const rawName = m[1];
       const name =
         kind === "label" ? rawName : rawName.includes(".") ? rawName.split(".").pop()! : rawName;
-      const docstring = extractDocstringAfterDefinition(lines, i);
+
+      // For variable-like definitions, prefer comment blocks above; fall back to after
+      let docstring: string | null = null;
+      if (VARIABLE_KINDS.has(kind)) {
+        docstring = extractDocstringBeforeDefinition(lines, i);
+      }
+      if (docstring === null) {
+        docstring = extractDocstringAfterDefinition(lines, i);
+      }
+
       out.push({ name, kind, line: i, docstring });
       break;
     }

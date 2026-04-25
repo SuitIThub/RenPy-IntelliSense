@@ -1,5 +1,6 @@
 /**
- * Extract docstrings placed immediately after a definition line.
+ * Extract docstrings placed immediately after a definition line,
+ * or from comment blocks directly above (for variable definitions).
  * Supports standard Python """ / ''' blocks and Ren'Py script lines with leading #.
  */
 
@@ -62,6 +63,40 @@ export function extractDocstringAfterDefinition(lines: string[], defLineIdx: num
   if (triple !== null) return triple;
 
   return tryExtractHashOnlyBlock(lines, i);
+}
+
+/**
+ * Extract a docstring from consecutive # comment lines directly above a definition.
+ * The comment block must be immediately above the definition (no blank lines between).
+ */
+export function extractDocstringBeforeDefinition(lines: string[], defLineIdx: number): string | null {
+  if (defLineIdx <= 0) return null;
+
+  const commentLines: string[] = [];
+  let i = defLineIdx - 1;
+
+  while (i >= 0) {
+    const raw = stripInvisibleLeading(lines[i]!);
+    const st = stripHashPrefix(raw);
+
+    if (!st.hadHash) {
+      // Not a comment line - stop collecting
+      break;
+    }
+
+    // Skip lines that look like they start a triple-quoted string (not a doc comment)
+    if (/^\s*(r|u|R|U)?("""|''')/.test(st.content)) break;
+
+    commentLines.unshift(st.content.trimEnd());
+    i--;
+  }
+
+  if (commentLines.length === 0) return null;
+
+  const joined = commentLines.join("\n").trim();
+  if (joined.length < 1) return null;
+
+  return normalizeDocstring(joined);
 }
 
 function tryExtractTripleQuoted(lines: string[], startIdx: number): string | null {

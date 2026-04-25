@@ -1,4 +1,4 @@
-# Ren'Py Documentation Hover
+# Ren'Py IntelliSense
 
 [![Release workflow](https://github.com/SuitIThub/RenPy-IntelliSense/actions/workflows/release.yml/badge.svg)](https://github.com/SuitIThub/RenPy-IntelliSense/actions/workflows/release.yml)
 [![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.85.0-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
@@ -12,161 +12,188 @@ Licensed under the [MIT License](LICENSE). Release history: [CHANGELOG](CHANGELO
 
 ---
 
-## Building and installing
+## Features
 
-1. Install dependencies: `npm install`
-2. Compile: `npm run compile`
-3. Regenerate the bundled API index (optional, after Ren'Py doc changes): `npm run generate-index`
-4. Press **F5** in VS Code with this folder open (**Run Extension**), or package a `.vsix` with `@vscode/vsce` if you use it.
+### Hover Documentation
+
+Hover over any symbol to see:
+- Your local docstrings (from triple-quoted strings or comment blocks)
+- Excerpts from the official Ren'Py documentation (optional, requires network)
+- Clickable links to jump to definitions
+
+### Signature Help
+
+When typing function or class calls, see the signature with:
+- Full parameter list
+- **Active parameter highlighting** - the current parameter is highlighted as you type
+- For classes, shows `class ClassName(param1, param2)` by combining the class name with `__init__` parameters
+
+### Smart Completions
+
+Context-aware completions for:
+- **Your symbols**: Classes, functions, labels, screens, transforms, images, and variables
+- **Ren'Py built-ins**: All documented engine symbols
+- **ATL keywords**: Properties (`xpos`, `alpha`, `zoom`, `rotate`), statements (`pause`, `repeat`, `parallel`), and warpers (`linear`, `ease`, `easein`) when inside transforms
+- **Screen language**: Displayables (`text`, `button`, `vbox`), properties (`action`, `style`), and actions (`Jump`, `SetVariable`, `Show`) when inside screens
+- **Persistent variables**: Auto-complete for `persistent.*` based on usage in your project
+
+### Cross-References
+
+Use Sphinx-style roles in docstrings to create clickable links:
+- `:class:`ClassName`` - Link to a class
+- `:func:`function_name`` - Link to a function
+- `:meth:`ClassName.method`` - Link to a method
 
 ---
 
-## Writing docstrings the extension will find
+## Settings
 
-Put the docstring **directly under** the definition, with only blank lines or a lone `pass` / `...` / `breakpoint()` between them (those are skipped so the docstring can still be detected).
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `renpyDocHover.fetchOnline` | `true` | Fetch documentation from renpy.org (needs network) |
+| `renpyDocHover.cacheSize` | `400` | Number of fetched pages to cache in memory |
+| `renpyDocHover.preferLocalDocstring` | `true` | Show your docstrings when available |
+| `renpyDocHover.showOnlineDocsWithLocal` | `true` | Show online docs alongside local docstrings |
 
-### Python blocks (`"""` or `'''`)
+---
 
-Use normal triple-quoted strings, optionally with `r` / `u` prefixes:
+## Writing Docstrings
+
+The extension recognizes docstrings in several formats.
+
+### Triple-Quoted Strings (Python style)
 
 ```python
 def add_event(self, *events):
     """
     Adds events to storage.
+    
+    @param events: Events to add
     """
 
 class MyScreen:
     '''Short class doc.'''
 ```
 
-### Ren'Py script (outside `python:` blocks)
+### Comment Blocks Above Variables
 
-If the block is commented with `#`, you can document it like this:
+Comment blocks directly above variable definitions are treated as docstrings:
 
-- Start with `# """` (or `# '''`), use `#` on continuation lines if you like, and close with `"""` on its own line (with or without `#` on that line), **or**
-- Use several consecutive `#` lines as a plain comment doc block (no triple quotes).
+```renpy
+# Configuration for the main character.
+# Controls appearance and behavior.
+define mc = Character("Alex")
 
-The extension strips leading `#` for display.
+# Tracks whether the player has completed the tutorial.
+default tutorial_done = False
+```
 
-### What counts as a “definition”
+### Ren'Py Script Comments
 
-The scanner looks for these forms (indentation and same-line decorators like `@staticmethod` are supported in the usual Python way):
+For code outside `python:` blocks, use `#` comments:
 
-| Kind        | Example start |
-|------------|----------------|
-| Function   | `def name(` / `async def name(` |
-| Class      | `class Name:` |
-| Label      | `label name:` |
-| Define     | `define name =` |
-| Default    | `default name =` |
-| Screen     | `screen name:` |
-| Transform  | `transform name:` |
-| Image      | `image name` (first identifier) |
+```renpy
+# """
+# This is a docstring for the label below.
+# """
+label start:
+    pass
+```
 
-Hover resolves the symbol under the cursor to the **latest** matching definition **on or above** that line (so headers and bodies both work).
+Or use consecutive `#` lines as a plain comment block.
 
----
+### Supported Definition Types
 
-## Docstring conventions (formatting in hovers)
-
-The extension turns your text into Markdown for the hover panel. These styles are recognized:
-
-### Section titles (Google / NumPy–style)
-
-Standalone lines such as:
-
-`Args:`, `Arguments:`, `Parameters:`, `Returns:`, `Yields:`, `Raises:`, `Note` / `Notes:`, `Warning:`, `Example` / `Examples:`, `Attributes:`, `See Also:`
-
-are turned into bold headings (e.g. **Parameters:**).
-
-### Epydoc-style tags
-
-| Input | Rendered roughly as |
-|--------|----------------------|
-| `@param name description` | Bullet with **`name`** |
-| `@returns description` | **Returns:** … |
-| `@yield description` | **Yields:** … |
-| `@raise(s) Exc description` | Bullet with **`Exc`** |
-| `@type name description` | Type line for **`name`** |
-
-### Inline code
-
-- Double backticks (reST style): `` ``code`` `` → `` `code` ``
-- Ordinary single backticks work as usual in Markdown.
-
-### Doctest lines
-
-Lines starting with `>>> ` or `... ` are wrapped in a `text` code fence for readability.
+| Kind | Example |
+|------|---------|
+| Function | `def name(` / `async def name(` |
+| Class | `class Name:` |
+| Label | `label name:` |
+| Define | `define name =` |
+| Default | `default name =` |
+| Screen | `screen name:` |
+| Transform | `transform name:` |
+| Image | `image name` |
+| Variable | `name =` (plain Python assignment) |
 
 ---
 
-## Cross-referencing other code
+## Docstring Formatting
 
-### Sphinx-style roles (recommended for cross-refs)
+The extension converts your docstrings to Markdown for display.
 
-Use backticks and a role name. When the name can be resolved to a **workspace** definition (`.rpy` / `.rpym`), the extension turns it into a **clickable link** in hovers and completion details (a `command:` link handled by this extension, not a raw `file:` URL — those often show up as plain text in the hover UI). **Ctrl+click** / **Cmd+click** the link to **open the file and move the cursor** to the matching definition line. The small italic suffix (`class`, `function`, …) is the Sphinx role. If there is no matching target, the name stays as inline code with a role hint only.
+### Section Headers
 
-| Pattern | Typical use |
-|---------|-------------|
-| `` :class:`ClassName` `` | Classes |
-| `` :func:`function_name` `` | Functions |
-| `` :meth:`method_name` `` | Methods (same as func for display) |
-| `` :ref:`some_label` `` | Any symbol name you use consistently |
+These are rendered as bold headings:
+`Args:`, `Parameters:`, `Returns:`, `Yields:`, `Raises:`, `Note:`, `Warning:`, `Example:`, `Attributes:`, `See Also:`
 
-**Workspace index:** The extension scans all `*.rpy` / `*.rpym` files in the workspace (excluding `node_modules`, `.git`, and common virtualenv folders) and keeps an in-memory index. **Opening** or **saving** a file updates that file’s slice of the index; deleting a file removes it.
+### Epydoc Tags
 
-**Disambiguating duplicate names:** If the same simple name appears more than once in the workspace (e.g. two `add_event` methods), use a **qualified** name built from the enclosing class chain, like Sphinx’s dotted form:
+| Tag | Rendered as |
+|-----|-------------|
+| `@param name desc` | Bullet with **`name`** |
+| `@returns desc` | **Returns:** ... |
+| `@raises Exc desc` | Bullet with **`Exc`** |
+| `@type name desc` | Type line for **`name`** |
 
-| Pattern | Meaning |
-|---------|---------|
-| `` :meth:`FragmentStorage.add_event` `` | Method `add_event` on class `FragmentStorage` |
-| `` :class:`Outer.Inner` `` | Nested class `Inner` inside `Outer` |
+### Code Formatting
 
-If a simple name is **unique** workspace-wide, it still resolves without the prefix. If it is **ambiguous** (multiple matches), the link is not created until you qualify it.
+- Double backticks: ``` ``code`` ``` → `` `code` ``
+- Single backticks work as normal Markdown
+- Lines starting with `>>> ` are wrapped in code fences
 
-You can also use the Sphinx “display” form (only the part before `<` is used for matching):
+---
 
-`` :class:`MyClass <MyClass>` ``
+## Cross-Reference Links
 
-Examples:
+### Sphinx-Style Roles
+
+Reference other code in your docstrings with clickable links:
 
 ```python
 def push_screen(self):
     """
-    See :class:`MyOverlay` and :func:`restore_screen` for pairing calls.
-    Opens the screen defined in :meth:`FragmentStorage.add_event`.
+    See :class:`MyOverlay` and :func:`restore_screen` for pairing.
+    Uses :meth:`FragmentStorage.add_event` internally.
     """
 ```
 
-### Labels (`label foo` / `label chapter.start`)
+**Ctrl+click** / **Cmd+click** links to jump to the definition.
 
-For `label a.b`, you can reference the full name or often the **last segment** (`b`), depending on how the label was stored.
+### Qualified Names
 
-### Markdown links
+For duplicate names, use the full path:
 
-Normal Markdown links `[text](url)` are left as-is, so you can link to the [Ren'Py manual](https://www.renpy.org/doc/html/) or your own docs.
+| Pattern | Meaning |
+|---------|---------|
+| `:meth:`FragmentStorage.add_event`` | Method on specific class |
+| `:class:`Outer.Inner`` | Nested class |
 
-### Ren'Py engine symbols
+### Workspace Index
 
-Built-ins (`renpy.music.play`, `Character`, screen actions, etc.) are covered by the bundled index and online hover when enabled—not by local `:func:` roles.
-
----
-
-## Settings (`renpyDocHover.*`)
-
-| Setting | Default | Meaning |
-|---------|---------|---------|
-| `fetchOnline` | `true` | Fetch manual pages for excerpts (needs network). |
-| `cacheSize` | `400` | How many fetched pages to keep in memory. |
-| `preferLocalDocstring` | `true` | Show your docstring when available. |
-| `showOnlineDocsWithLocal` | `true` | If the symbol is also in the manual, add the online excerpt below a horizontal rule. |
+The extension indexes all `.rpy` / `.rpym` files in your workspace. The index updates when files are opened, saved, or deleted.
 
 ---
 
 ## Limitations
 
-- Cross-refs use the **workspace index**; symbols in unsaved buffers in *other* files may be stale until those files are saved (the **current** file always uses the editor buffer).
-- Very complex same-line decorators (nested parentheses) may not be detected; put decorators on previous lines.
-- Docstring extraction follows Python/Ren'Py text structure; invalid indentation may confuse detection.
+- Cross-refs use the workspace index; unsaved changes in other files may be stale until saved
+- Complex same-line decorators with nested parentheses may not be detected; put decorators on separate lines
+- Invalid indentation may confuse docstring detection
 
-If something is wrong with hovers, check that the file is `.rpy` / `.rpym` and that the cursor is on the symbol you expect (including on the `def` / `class` line for that symbol).
+---
+
+## For Developers
+
+### Building and Installing
+
+1. Install dependencies: `npm install`
+2. Compile: `npm run compile`
+3. Regenerate the API index (optional): `npm run generate-index`
+4. Press **F5** to run the extension, or package with `@vscode/vsce`
+
+### Project Structure
+
+- `src/` - TypeScript source files
+- `data/doc-index.json` - Bundled Ren'Py API index
+- `scripts/` - Build scripts for index generation
