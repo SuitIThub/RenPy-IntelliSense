@@ -2,7 +2,7 @@
   "name": "renpy-intellisense",
   "displayName": "Ren'Py IntelliSense",
   "description": "Shows Ren'Py official documentation in hovers for .rpy / .rpym code.",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "publisher": "Suit-Ji",
   "license": "MIT",
   "repository": {
@@ -17,7 +17,8 @@
   ],
   "activationEvents": [
     "onLanguage:renpy",
-    "onLanguage:python"
+    "workspaceContains:**/*.rpy",
+    "workspaceContains:**/*.rpym"
   ],
   "main": "./out/extension.js",
   "icon": "Ren'Py.png",
@@ -29,10 +30,21 @@
     "CHANGELOG.md"
   ],
   "contributes": {
+    "languages": [
+      {
+        "id": "renpy",
+        "aliases": ["Ren'Py", "RenPy"],
+        "extensions": [".rpy", ".rpym"]
+      }
+    ],
     "commands": [
       {
         "command": "renpyDocHover.openDefinition",
         "title": "Ren'Py Doc Hover: Open cross-reference at line"
+      },
+      {
+        "command": "renpyDocHover.applyWorkspaceRecommendations",
+        "title": "Ren'Py IntelliSense: Apply recommended workspace settings"
       }
     ],
     "configuration": {

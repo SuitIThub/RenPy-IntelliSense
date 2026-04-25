@@ -5,6 +5,7 @@
 
 import type { Uri } from "vscode";
 import { extractDocstringAfterDefinition, extractDocstringBeforeDefinition, stripInvisibleLeading } from "./docstringExtract";
+import { LabelContextTracker } from "./labelQualification";
 import type { DefKind } from "./localDefinitions";
 
 /** Kinds that support comment-above-line as docstring (variable initializations) */
@@ -19,6 +20,12 @@ export interface IndexedSymbol {
   line: number;
   docstring: string | null;
   uri: Uri;
+  /** First token after `->` on the same line as `def` (receiver inference). */
+  returnTypeHint?: string;
+  /** First base class token in `class X(Base):` (receiver inference / inheritance). */
+  baseTypeHint?: string;
+  /** Parent label for dotted labels, e.g. `a.b` -> `a`. */
+  parentLabelHint?: string;
 }
 
 interface ClassFrame {
@@ -50,6 +57,31 @@ function leadingIndentCols(line: string): number {
 function qualifyFromStack(classStack: ClassFrame[], name: string): string {
   if (classStack.length === 0) return name;
   return `${classStack.map((c) => c.name).join(".")}.${name}`;
+}
+
+/** First identifier / dotted name after `->` (best-effort; same line as `def`). */
+function parseDefReturnTypeHint(raw: string): string | undefined {
+  const arrow = raw.indexOf("->");
+  if (arrow < 0) return undefined;
+  let tail = raw.slice(arrow + 2).trimStart();
+  for (;;) {
+    const wrap = tail.match(/^(Optional|Union)\s*\[\s*([\w.]+)/);
+    if (wrap) {
+      tail = wrap[2]!.trimStart();
+      continue;
+    }
+    break;
+  }
+  const m = tail.match(/^([\w.]+)/);
+  return m?.[1] ?? undefined;
+}
+
+/** First identifier / dotted name inside `class X(Base):` (best-effort; same line). */
+function parseClassBaseTypeHint(raw: string): string | undefined {
+  const m = raw.match(/^\s*class\s+\w+\s*\(\s*([\w.]+)/);
+  if (!m?.[1]) return undefined;
+  const tail = m[1].split(".").at(-1);
+  return tail || undefined;
 }
 
 /**
@@ -84,9 +116,13 @@ export function scanQualifiedDefinitions(text: string, uri: Uri): IndexedSymbol[
   const lines = text.split(/\r?\n/);
   const out: IndexedSymbol[] = [];
   const classStack: ClassFrame[] = [];
+  const labelCtx = new LabelContextTracker();
 
   for (let i = 0; i < lines.length; i++) {
     const raw = stripInvisibleLeading(lines[i]!);
+    const trimmed = raw.trim();
+    // Blank / comment-only lines must not alter class nesting.
+    if (!trimmed || trimmed.startsWith("#")) continue;
     const indent = leadingIndentCols(raw);
 
     while (classStack.length > 0 && classStack[classStack.length - 1]!.indent >= indent) {
@@ -104,26 +140,44 @@ export function scanQualifiedDefinitions(text: string, uri: Uri): IndexedSymbol[
         const name = rawName;
         classStack.push({ name, indent });
         const qualified = classStack.map((c) => c.name).join(".");
-        out.push({ qualifiedName: qualified, simpleName: name, kind, line: i, docstring, uri });
+        out.push({
+          qualifiedName: qualified,
+          simpleName: name,
+          kind,
+          line: i,
+          docstring,
+          uri,
+          baseTypeHint: parseClassBaseTypeHint(raw),
+        });
         break;
       }
 
       if (kind === "def") {
         const name = rawName;
         const qualified = qualifyFromStack(classStack, name);
-        out.push({ qualifiedName: qualified, simpleName: name, kind, line: i, docstring, uri });
-        break;
-      }
-
-      if (kind === "label") {
-        const full = rawName;
         out.push({
-          qualifiedName: full,
-          simpleName: full,
+          qualifiedName: qualified,
+          simpleName: name,
           kind,
           line: i,
           docstring,
           uri,
+          returnTypeHint: parseDefReturnTypeHint(raw),
+        });
+        break;
+      }
+
+      if (kind === "label") {
+        const { qualified, simple } = labelCtx.qualify(rawName);
+        const dot = qualified.lastIndexOf(".");
+        out.push({
+          qualifiedName: qualified,
+          simpleName: simple,
+          kind,
+          line: i,
+          docstring,
+          uri,
+          ...(dot > 0 ? { parentLabelHint: qualified.slice(0, dot) } : {}),
         });
         break;
       }

@@ -1,4 +1,5 @@
 import type { Uri } from "vscode";
+import type { DefKind } from "./localDefinitions";
 
 /** Must match `package.json` — used in trusted Markdown links (hovers / completions). */
 export const OPEN_DEFINITION_COMMAND = "renpyDocHover.openDefinition";
@@ -14,7 +15,7 @@ export interface FormatDocstringOptions {
    * Resolve `:role:\`name\`` to a document location. Supports qualified names
    * (e.g. FragmentStorage.add_event) via the project index.
    */
-  resolveCrossRef?: (name: string) => { uri: Uri; line: number } | undefined;
+  resolveCrossRef?: (name: string) => { uri: Uri; line: number; kind?: DefKind } | undefined;
 }
 
 /** Escape text used inside `[...](url)` link labels (CommonMark). */

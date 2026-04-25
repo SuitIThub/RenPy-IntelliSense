@@ -5,6 +5,46 @@ All notable changes to **Ren'Py IntelliSense** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-04-25
+
+### Added
+
+- **Project-wide symbol resolution with Ren'Py `$` local scope rules**: definitions from other files are now used across hover, cross-reference links, completion docs, and signature help; `$ var = ...` (`variable_local`) remains file-local only.
+- **Receiver/type inference for chained calls**: member calls like `obj.add_event(...)` can resolve to class-qualified methods via assignment analysis (`var = ClassName(...)`, `var = factory(...)` with return hints), including cross-file variable definitions.
+- **Inheritance-aware method resolution**: subclass instances now resolve inherited methods from superclasses (e.g. `FragmentStorage` -> `EventStorage.add_event`).
+- **Class hierarchy links in hover**: class hovers include a clickable hierarchy chain to jump to parent classes quickly.
+- **Label hierarchy links in hover**: dotted labels (including relative sublabels) now show a clickable parent chain (e.g. `a.b.c -> a.b -> a`).
+
+### Changed
+
+- **Hover header format**: the header now shows the symbol kind (`method`, `function`, `class`, `label`, etc.) and uses a larger clickable link target for faster navigation.
+- **Definition indexing robustness**: class/method qualification is now stable across blank/comment-only lines, improving qualified method lookup in real-world files.
+- **Relative label qualification**: `label .child:` now links to the latest previous non-relative label (Ren'Py-correct base context), not the latest label overall.
+
+## [1.1.4] - 2026-04-25
+
+### Fixed
+
+- **Member hover on `$` lines**: the receiver to the left of `.method` is parsed as the expression ending at the dot (not the whole line prefix), so cases like `$ aona = Person["key"].get_renpy_char()` resolve to `Person.get_renpy_char` instead of failing on `$ … = …`.
+- **Hover word range**: identifier expansion no longer crosses `.`, so the hovered token is `get_renpy_char` (not `.get_renpy_char`), which restores correct detection of the `.` before the method for member-chain resolution.
+
+### Added
+
+- **Hover resolution for chained member access** (e.g. `Person["key"].get_renpy_char()`): resolves the method or attribute against the receiver expression (trailing `[...]` subscripts stripped from the receiver so indexed lookups match class-qualified defs like `Person.get_renpy_char`).
+- **Ren'Py sublabels** (`label .child:`): labels starting with `.` are stored and matched as children of the previous label (full dotted name), consistent with Ren'Py’s relative label rules.
+
+## [1.1.3] - 2026-04-25
+
+### Added
+
+- **`renpy` language contribution** in `package.json` for `.rpy` and `.rpym`, so the editor can bind Ren'Py scripts to a dedicated language id instead of Python.
+- **Command: “Ren'Py IntelliSense: Apply recommended workspace settings”** — merges `files.associations` and `python.analysis.exclude` into `.vscode/settings.json` for the first workspace folder.
+
+### Changed
+
+- **Hover, completion, and signature-help providers** now register only for `language: renpy` (`file` and `untitled` schemes), not for `python`, reducing duplicate IntelliSense when the language id is Ren'Py.
+- **Activation events**: removed `onLanguage:python`; added `workspaceContains` for `**/*.rpy` and `**/*.rpym` so the extension can load in Ren'Py projects before a file is opened.
+
 ## [1.1.2] - 2026-04-25
 
 ### Added

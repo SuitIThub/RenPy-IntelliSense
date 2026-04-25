@@ -9,8 +9,24 @@ import { EXTRA_DOC_LINKS } from "./extraLinks";
 import type { ProjectIndex } from "./projectIndex";
 import { scanQualifiedDefinitions } from "./qualifiedDefinitions";
 import { isRenpyFile } from "./symbolRange";
+import { RENPY_DOCUMENT_SELECTOR } from "./documentSelector";
 import { ALL_ATL_KEYWORDS, type AtlKeyword } from "./atlKeywords";
 import { ALL_SCREEN_KEYWORDS, SCREEN_ACTIONS, type ScreenKeyword } from "./screenKeywords";
+
+function getLinesForIndexedUri(
+  uri: vscode.Uri,
+  currentDoc: vscode.TextDocument,
+  currentLines: string[]
+): string[] {
+  if (uri.fsPath === currentDoc.uri.fsPath) return currentLines;
+  const open = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === uri.fsPath);
+  if (open) return open.getText().split(/\r?\n/);
+  try {
+    return fs.readFileSync(uri.fsPath, "utf8").split(/\r?\n/);
+  } catch {
+    return currentLines;
+  }
+}
 
 function loadUrlMap(): Record<string, string> {
   const p = path.join(__dirname, "..", "data", "doc-index.json");
@@ -119,7 +135,7 @@ export function registerRenpyDocCompletions(projectIndex: ProjectIndex): vscode.
   const extraKeys = Object.keys(EXTRA_DOC_LINKS);
 
   const provider = vscode.languages.registerCompletionItemProvider(
-    [{ language: "renpy" }, { language: "python" }],
+    RENPY_DOCUMENT_SELECTOR,
     {
       provideCompletionItems(document, position) {
         if (!isRenpyFile(document)) return undefined;
@@ -196,7 +212,10 @@ export function registerRenpyDocCompletions(projectIndex: ProjectIndex): vscode.
 
         const docText = document.getText();
         const linesSplit = docText.split(/\r?\n/);
-        const localSyms = scanQualifiedDefinitions(docText, document.uri);
+        const localSyms = [
+          ...scanQualifiedDefinitions(docText, document.uri),
+          ...projectIndex.symbolsExceptCurrentFile(document.uri.fsPath),
+        ];
         const resolveCrossRef = createMergedCrossRefResolver(projectIndex, document);
 
         for (const d of localSyms) {
@@ -219,7 +238,8 @@ export function registerRenpyDocCompletions(projectIndex: ProjectIndex): vscode.
           const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Reference);
           if (local) {
             item.kind = vscode.CompletionItemKind.Function;
-            const sig = extractDefinitionSignature(linesSplit, local.line);
+            const sigLines = getLinesForIndexedUri(local.uri, document, linesSplit);
+            const sig = extractDefinitionSignature(sigLines, local.line, local.kind);
             const parts: string[] = [];
             if (sig) parts.push(["```python", sig, "```"].join("\n"));
             const ds = local.docstring?.trim();

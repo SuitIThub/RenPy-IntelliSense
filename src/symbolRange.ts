@@ -1,8 +1,12 @@
 import * as vscode from "vscode";
 
-const IDENT = /[\w$.]/;
+/**
+ * One identifier segment (no `.`), so `foo.bar` yields `bar` when the cursor is on `bar`.
+ * That keeps member access hovers working: the character before the segment is `.` for `receiver.method`.
+ */
+const IDENT = /[\w]/;
 
-/** Expand left/right to a dotted Python/Ren'Py identifier (e.g. renpy.music.play). */
+/** Expand left/right to a single identifier segment at the cursor. */
 export function wordRangeAtPosition(
   document: vscode.TextDocument,
   position: vscode.Position

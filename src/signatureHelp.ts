@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
-import { createMergedCrossRefResolver } from "./crossRefResolver";
+import { createMergedCrossRefResolver, type CrossRefLocation } from "./crossRefResolver";
+import { collectReceiverInferenceContext, tryExpandChainedCallee } from "./receiverInference";
 import { extractDefinitionSignature } from "./definitionSignature";
 import type { ProjectIndex } from "./projectIndex";
 import { scanQualifiedDefinitions } from "./qualifiedDefinitions";
 import { isRenpyFile } from "./symbolRange";
+import { RENPY_DOCUMENT_SELECTOR } from "./documentSelector";
 
 /** All text in the document strictly before `position` (for finding the active `(`). */
 function textBeforeCursor(doc: vscode.TextDocument, position: vscode.Position): string {
@@ -439,19 +441,14 @@ function fallbackLocalCalleeLocation(
   document: vscode.TextDocument,
   callee: string,
   atLine: number
-): { uri: vscode.Uri; line: number } | undefined {
+): CrossRefLocation | undefined {
   const symbols = scanQualifiedDefinitions(document.getText(), document.uri);
-  let best:
-    | {
-        uri: vscode.Uri;
-        line: number;
-      }
-    | undefined;
+  let best: CrossRefLocation | undefined;
   for (const s of symbols) {
     if (s.line > atLine) continue;
     if (s.simpleName !== callee && s.qualifiedName !== callee) continue;
     if (!best || s.line > best.line) {
-      best = { uri: document.uri, line: s.line };
+      best = { uri: document.uri, line: s.line, kind: s.kind };
     }
   }
   return best;
@@ -462,14 +459,17 @@ function fallbackIndexedCalleeLocation(
   document: vscode.TextDocument,
   callee: string,
   atLine: number
-): { uri: vscode.Uri; line: number } | undefined {
+): CrossRefLocation | undefined {
   const qualified = projectIndex.getSymbolsByQualifiedName(callee);
   if (qualified.length > 0) {
     const first = qualified[0]!;
-    return { uri: first.uri, line: first.line };
+    return { uri: first.uri, line: first.line, kind: first.kind };
   }
 
-  const candidates = projectIndex.getSymbolsBySimpleName(callee);
+  const raw = projectIndex.getSymbolsBySimpleName(callee);
+  const candidates = raw.filter(
+    (s) => s.kind !== "variable_local" || s.uri.fsPath === document.uri.fsPath
+  );
   if (candidates.length === 0) return undefined;
 
   // Prefer current file and closest previous definition line.
@@ -494,14 +494,14 @@ function fallbackIndexedCalleeLocation(
     }
   }
 
-  return { uri: best.uri, line: best.line };
+  return { uri: best.uri, line: best.line, kind: best.kind };
 }
 
 export function registerRenpySignatureHelp(
   projectIndex: ProjectIndex
 ): vscode.Disposable {
   return vscode.languages.registerSignatureHelpProvider(
-    [{ language: "renpy" }, { language: "python" }],
+    RENPY_DOCUMENT_SELECTOR,
     {
       async provideSignatureHelp(document, position) {
         if (!isRenpyFile(document)) return null;
@@ -510,6 +510,12 @@ export function registerRenpySignatureHelp(
         const cursorOffset = document.offsetAt(position);
         const before = fullText.slice(0, cursorOffset);
         const resolve = createMergedCrossRefResolver(projectIndex, document);
+        const inferenceCtx = collectReceiverInferenceContext(
+          document,
+          fullText,
+          projectIndex.assignmentHintsExceptCurrentFile(document.uri.fsPath),
+          projectIndex.symbolsExceptCurrentFile(document.uri.fsPath)
+        );
         const parenStack = findActiveCallOpenParens(before);
         if (parenStack.length === 0) return null;
 
@@ -519,8 +525,10 @@ export function registerRenpySignatureHelp(
 
         for (let i = 0; i < parenStack.length; i++) {
           const parenIdx = parenStack[i]!;
-          const callee = extractCalleeBeforeOpenParen(before, parenIdx);
-          if (!callee) continue;
+          const calleeRaw = extractCalleeBeforeOpenParen(before, parenIdx);
+          if (!calleeRaw) continue;
+          const callee =
+            tryExpandChainedCallee(calleeRaw, position.line, inferenceCtx) ?? calleeRaw;
 
           const loc =
             resolve(callee) ??
@@ -533,7 +541,7 @@ export function registerRenpySignatureHelp(
               ? document
               : await vscode.workspace.openTextDocument(loc.uri);
           const lines = targetDoc.getText().split(/\r?\n/);
-          const sig = extractDefinitionSignature(lines, loc.line);
+          const sig = extractDefinitionSignature(lines, loc.line, loc.kind);
           if (!sig) continue;
 
           const closeParenIdx = findMatchingCloseParen(fullText, parenIdx);

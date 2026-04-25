@@ -4,6 +4,7 @@
  */
 
 import { extractDocstringAfterDefinition, extractDocstringBeforeDefinition, stripInvisibleLeading } from "./docstringExtract";
+import { LabelContextTracker } from "./labelQualification";
 
 export type DefKind =
   | "def"
@@ -51,6 +52,7 @@ const VARIABLE_KINDS: Set<DefKind> = new Set(["define", "default", "variable", "
 export function scanLocalDefinitions(text: string): LocalDefinition[] {
   const lines = text.split(/\r?\n/);
   const out: LocalDefinition[] = [];
+  const labelCtx = new LabelContextTracker();
 
   for (let i = 0; i < lines.length; i++) {
     const line = stripInvisibleLeading(lines[i]!);
@@ -59,7 +61,11 @@ export function scanLocalDefinitions(text: string): LocalDefinition[] {
       if (!m?.[1]) continue;
       const rawName = m[1];
       const name =
-        kind === "label" ? rawName : rawName.includes(".") ? rawName.split(".").pop()! : rawName;
+        kind === "label"
+          ? labelCtx.qualify(rawName).qualified
+          : rawName.includes(".")
+            ? rawName.split(".").pop()!
+            : rawName;
 
       // For variable-like definitions, prefer comment blocks above; fall back to after
       let docstring: string | null = null;
@@ -92,9 +98,12 @@ function symbolMatchesDefinition(d: LocalDefinition, symbol: string): boolean {
   if (d.name === symbol) return true;
   const plain = symbol.includes(".") ? symbol.split(".").pop()! : symbol;
   if (d.name === plain) return true;
-  if (d.kind === "label" && d.name.includes(".")) {
-    const seg = d.name.split(".").pop()!;
-    if (seg === plain || seg === symbol) return true;
+  if (d.kind === "label") {
+    if (d.name === symbol) return true;
+    if (d.name.includes(".")) {
+      const seg = d.name.split(".").pop()!;
+      if (seg === plain || seg === symbol) return true;
+    }
   }
   return false;
 }

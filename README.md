@@ -12,6 +12,47 @@ Licensed under the [MIT License](LICENSE). Release history: [CHANGELOG](CHANGELO
 
 ---
 
+## What's New in 1.2.0
+
+- **Project-wide symbol resolution** with correct Ren'Py `$` local behavior (`$` assignments stay file-local; other definitions are available across files)
+- **Chained member resolution with receiver inference** (e.g. `storage.add_event(...)` resolves from assignments and return-type hints)
+- **Inheritance-aware method lookup** (subclass instances can resolve methods defined in superclasses)
+- **Improved hover UX** with kind-aware headers (e.g. `(method)`, `(class)`), larger clickable headers, clickable class hierarchy links, and clickable label hierarchy links
+- **Ren'Py-correct relative sublabel base tracking** (`label .child:` resolves against the latest previous non-relative label)
+
+---
+
+## Setup (avoid Python / Pylance on `.rpy`)
+
+VS Code merges results from **every** provider registered for a document’s **language id**. If `.rpy` files are treated as **Python**, Pylance can still contribute hovers and completions alongside this extension.
+
+**Recommended:**
+
+1. Map Ren'Py scripts to the `renpy` language id (this extension contributes that id for `.rpy` / `.rpym`).
+2. Tell Python analysis to ignore Ren'Py files.
+
+**Option A — command (workspace folder required)**  
+Run **“Ren'Py IntelliSense: Apply recommended workspace settings”** from the Command Palette. It creates or updates `.vscode/settings.json` with the keys below.
+
+**Option B — manual `settings.json`**
+
+```json
+{
+  "files.associations": {
+    "*.rpy": "renpy",
+    "*.rpym": "renpy"
+  },
+  "python.analysis.exclude": [
+    "**/*.rpy",
+    "**/*.rpym"
+  ]
+}
+```
+
+After changing associations, **reload the window** or **reopen** `.rpy` files so the language mode updates.
+
+---
+
 ## Features
 
 ### Hover Documentation
