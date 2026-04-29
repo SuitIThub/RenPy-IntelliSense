@@ -5,6 +5,24 @@ All notable changes to **Ren'Py IntelliSense** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-04-29
+
+### Added
+
+- **Class-aware docstring cross-references**: Sphinx-style roles (`:func:`, `:class:`, `:meth:`, `:attr:`) in class or method docstrings now automatically resolve unqualified names to members of that class. For example, `:func:`setup`` in a `MyClass` docstring will link to `MyClass.setup`.
+- **Flexible Sphinx role syntax**: Cross-references now support various signature formats:
+  - `:func:`get_name`` — simple name
+  - `:func:`get_name()`` — with parentheses
+  - `:func:`get_name() -> str`` — with return type
+  - `:func:`add_event(event: :class:`Event`)`` — nested roles for type hints
+- **Nested role support**: Roles can be nested inside each other (e.g., class references inside function signatures). Each nested role becomes a separate clickable link.
+- **Link tooltips**: Hovering over cross-reference links now shows the file name and line number (e.g., `events.rpy:42`) instead of the raw command URL.
+
+### Changed
+
+- **Cross-reference link format**: Only the symbol name is now clickable; parameters, return types, and other signature parts are displayed as plain text. This makes links cleaner and allows nested type references to each be individually clickable.
+- **Hover resolution for docstring symbols**: When hovering over a method or attribute name mentioned in a class docstring, the extension now correctly shows the class member instead of an unrelated symbol with the same name.
+
 ## [1.2.1] - 2026-04-29
 
 ### Fixed

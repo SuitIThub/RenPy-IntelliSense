@@ -10,12 +10,29 @@ export function makeOpenDefinitionCommandLink(uri: Uri, line0: number): string {
   return `command:${OPEN_DEFINITION_COMMAND}?${encodeURIComponent(JSON.stringify(args))}`;
 }
 
+/** Create a markdown link with tooltip showing the file location. */
+export function makeDefinitionLink(uri: Uri, line0: number, label: string): string {
+  const cmd = makeOpenDefinitionCommandLink(uri, line0);
+  const escapedLabel = escapeMarkdownLinkLabel(label);
+  // Extract just the filename from the path
+  const filename = uri.path.split('/').pop() || uri.fsPath;
+  const tooltip = `${filename}:${line0 + 1}`;
+  // Escape quotes in tooltip
+  const escapedTooltip = tooltip.replace(/"/g, '\\"');
+  return `[${escapedLabel}](${cmd} "${escapedTooltip}")`;
+}
+
 export interface FormatDocstringOptions {
   /**
    * Resolve `:role:\`name\`` to a document location. Supports qualified names
    * (e.g. FragmentStorage.add_event) via the project index.
    */
   resolveCrossRef?: (name: string) => { uri: Uri; line: number; kind?: DefKind } | undefined;
+  /**
+   * Enclosing class context for resolving unqualified method/attribute references.
+   * When set, `:func:\`method\`` will first try to resolve as `enclosingClass.method`.
+   */
+  enclosingClass?: string | null;
 }
 
 /** Escape text used inside `[...](url)` link labels (CommonMark). */
@@ -65,31 +82,198 @@ function normalizeFieldLabels(s: string): string {
     .replace(/^(\s*)See Also:\s*$/gim, "$1**See also:**\n");
 }
 
-/** Sphinx :role:`text` — dots allowed (FragmentStorage.add_event) */
-function replaceSphinxRoles(s: string, options?: FormatDocstringOptions): string {
-  return s.replace(/:([a-z]+):`([^`]+)`/gi, (_full, role: string, inner: string) => {
-    const name = inner.includes("<") ? inner.split("<")[0]!.trim() : inner.trim();
-    const loc = options?.resolveCrossRef?.(name);
-    const r = role.toLowerCase();
-    const label =
-      r === "class"
-        ? "class"
-        : r === "func" || r === "meth"
-          ? "function"
+/**
+ * Extract the base function/method name and the surrounding signature parts.
+ * The inner text may contain: `name`, `name()`, `name(args)`, `name() -> Type`, 
+ * `name(args) -> Type`, `display <actual>`, or nested roles.
+ * 
+ * Returns: { name: the resolvable name, prefix: text before name, suffix: text after name }
+ */
+function extractNameAndParts(inner: string): { name: string; prefix: string; suffix: string } {
+  let text = inner.trim();
+  let prefix = "";
+  let suffix = "";
+
+  // Handle display text with `<actual>` syntax: `:func:`display text <actual_name>``
+  if (text.includes("<") && text.endsWith(">")) {
+    const ltIdx = text.lastIndexOf("<");
+    // In this case, use the actual name but display the custom text
+    text = text.slice(ltIdx + 1, -1).trim();
+    // For <actual> syntax, the whole display text becomes the "name" to show
+    return { name: text, prefix: "", suffix: "" };
+  }
+
+  // Find where the name ends (at parenthesis, arrow, or end of string)
+  const parenIdx = text.indexOf("(");
+  const arrowIdx = text.indexOf("->");
+  
+  let nameEnd = text.length;
+  if (parenIdx >= 0) nameEnd = Math.min(nameEnd, parenIdx);
+  if (arrowIdx >= 0) nameEnd = Math.min(nameEnd, arrowIdx);
+  
+  const name = text.slice(0, nameEnd).trim();
+  suffix = text.slice(nameEnd);
+
+  return { name, prefix, suffix };
+}
+
+/**
+ * Process a single Sphinx role, resolving cross-references.
+ * Only the name part is linked, the rest (params, return type) is plain text.
+ * @param isNested - true if this role is embedded inside another role's content
+ */
+function processSingleRole(
+  role: string,
+  inner: string,
+  options?: FormatDocstringOptions,
+  isNested: boolean = false
+): string {
+  const r = role.toLowerCase();
+
+  // Determine the label based on role type
+  const label =
+    r === "class"
+      ? "class"
+      : r === "func" || r === "meth"
+        ? "function"
+        : r === "attr"
+          ? "attribute"
           : r === "ref"
             ? "ref"
             : role;
 
-    const code = `\`${name}\``;
+  // Extract the name and surrounding parts (params, return type)
+  const { name, prefix, suffix } = extractNameAndParts(inner);
 
-    if (loc) {
-      const cmd = makeOpenDefinitionCommandLink(loc.uri, loc.line);
-      const lbl = escapeMarkdownLinkLabel(name);
-      return `[${lbl}](${cmd}) _(${label})_`;
+  // Try to resolve - FIRST with class prefix if available (prioritize class members)
+  let loc = undefined;
+  if (options?.enclosingClass && !name.includes(".")) {
+    const qualified = `${options.enclosingClass}.${name}`;
+    loc = options.resolveCrossRef?.(qualified);
+  }
+  // Then try without class prefix
+  if (!loc) {
+    loc = options?.resolveCrossRef?.(name);
+  }
+
+  // Build the output: only the name is linked, suffix (params, return type) is plain text
+  if (loc) {
+    const linkedName = makeDefinitionLink(loc.uri, loc.line, name);
+    
+    if (isNested) {
+      // Nested roles don't get the label prefix
+      return `${prefix}${linkedName}${suffix}`;
     }
+    return `_(${label})_ ${prefix}${linkedName}${suffix}`;
+  }
 
-    return `${code} _(${label})_`;
-  });
+  // Unresolved - show name as code, suffix as plain text
+  if (isNested) {
+    // For nested unresolved, use temporary markers for the name part
+    return `${prefix}\u00AB${name}\u00BB${suffix}`;
+  }
+  return `_(${label})_ ${prefix}\`${name}\`${suffix}`;
+}
+
+interface RoleMatch {
+  startIndex: number;
+  endIndex: number;
+  role: string;
+  content: string;
+  full: string;
+}
+
+/**
+ * Find all Sphinx role matches with proper nesting support.
+ * Correctly identifies nested :role:`...` by tracking backtick depth.
+ */
+function findAllRoleMatches(s: string): RoleMatch[] {
+  const matches: RoleMatch[] = [];
+  const startPattern = /:([a-z]+):`/gi;
+  let startMatch;
+  
+  while ((startMatch = startPattern.exec(s)) !== null) {
+    const startIndex = startMatch.index;
+    const role = startMatch[1]!;
+    const contentStart = startIndex + startMatch[0].length;
+    
+    // Find the matching closing backtick by counting nested :role:` patterns
+    let depth = 1;
+    let i = contentStart;
+    
+    while (i < s.length && depth > 0) {
+      if (s[i] === '`') {
+        // Check if this backtick is preceded by :role: (opening a nested role)
+        const textBefore = s.slice(0, i);
+        if (/:([a-z]+):$/i.test(textBefore)) {
+          // This backtick opens a nested role
+          depth++;
+        } else {
+          // This backtick closes a role
+          depth--;
+        }
+      }
+      i++;
+    }
+    
+    if (depth === 0) {
+      const endIndex = i; // Position after the closing backtick
+      const content = s.slice(contentStart, endIndex - 1);
+      const full = s.slice(startIndex, endIndex);
+      matches.push({ startIndex, endIndex, role, content, full });
+    }
+  }
+  
+  return matches;
+}
+
+/**
+ * Check if content contains the START of a role pattern (:role:`)
+ */
+function hasRoleStart(content: string): boolean {
+  return /:([a-z]+):`/i.test(content);
+}
+
+/** 
+ * Sphinx :role:`text` — handles nested roles by processing innermost first.
+ * E.g., `:func:`add_event(event: :class:`Event`)``
+ */
+function replaceSphinxRoles(s: string, options?: FormatDocstringOptions): string {
+  let result = s;
+  let iterations = 0;
+  const maxIterations = 50; // Prevent infinite loops
+  
+  // Process one innermost role at a time
+  while (iterations < maxIterations) {
+    iterations++;
+    
+    const matches = findAllRoleMatches(result);
+    
+    if (matches.length === 0) {
+      break;
+    }
+    
+    // Find an innermost match (one whose content has no :role:` patterns)
+    const innermost = matches.find(m => !hasRoleStart(m.content));
+    
+    if (!innermost) {
+      // All matches have nested roles - shouldn't happen if parsing is correct
+      break;
+    }
+    
+    // Check if this role is nested (there's an unclosed :role:` before it)
+    const before = result.slice(0, innermost.startIndex);
+    const isNested = /:([a-z]+):`[^`]*$/.test(before);
+    
+    const replacement = processSingleRole(innermost.role, innermost.content, options, isNested);
+    const after = result.slice(innermost.endIndex);
+    result = before + replacement + after;
+  }
+  
+  // Convert temporary markers back to backticks for unresolved nested roles
+  result = result.replace(/\u00AB([^\u00BB]+)\u00BB/g, "`$1`");
+  
+  return result;
 }
 
 function replaceInlineDoubleBackticks(s: string): string {

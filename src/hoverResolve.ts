@@ -3,6 +3,129 @@ import type { IndexedSymbol } from "./qualifiedDefinitions";
 import type { ReceiverInferenceContext } from "./receiverInference";
 import { inferReceiverRootType, resolveMethodOnTypeHierarchy } from "./receiverInference";
 
+/**
+ * Find the actual line range of a docstring following a definition.
+ * Returns [startLine, endLine] (0-based, inclusive) or null if no docstring found.
+ */
+function findDocstringRange(
+  lines: string[],
+  defLine: number
+): { start: number; end: number } | null {
+  let i = defLine + 1;
+
+  // Skip blank lines and trivial statements (pass, ...)
+  while (i < lines.length) {
+    const trimmed = lines[i]!.trim();
+    if (trimmed === "" || trimmed === "pass" || trimmed === "...") {
+      i++;
+      continue;
+    }
+    break;
+  }
+
+  if (i >= lines.length) return null;
+
+  const line = lines[i]!;
+  const trimmed = line.trim();
+
+  // Check for triple-quoted string
+  const tripleMatch = trimmed.match(/^(r|u|R|U)?("""|''')/);
+  if (tripleMatch) {
+    const quote = tripleMatch[2] as '"""' | "'''";
+    const startLine = i;
+
+    // Check if single-line docstring (closes on same line)
+    const afterOpen = trimmed.slice(tripleMatch[0].length);
+    const closeIdx = afterOpen.indexOf(quote);
+    if (closeIdx >= 0) {
+      return { start: startLine, end: startLine };
+    }
+
+    // Multi-line: find closing quote
+    for (let j = i + 1; j < lines.length; j++) {
+      if (lines[j]!.includes(quote)) {
+        return { start: startLine, end: j };
+      }
+    }
+    // Unclosed docstring - extend to reasonable limit
+    return { start: startLine, end: Math.min(i + 50, lines.length - 1) };
+  }
+
+  // Check for hash-style comment block (Ren'Py)
+  if (trimmed.startsWith("#")) {
+    const startLine = i;
+    let endLine = i;
+    for (let j = i + 1; j < lines.length; j++) {
+      const t = lines[j]!.trim();
+      if (t.startsWith("#")) {
+        endLine = j;
+      } else if (t === "") {
+        // Allow blank lines within comment block
+        continue;
+      } else {
+        break;
+      }
+    }
+    return { start: startLine, end: endLine };
+  }
+
+  return null;
+}
+
+/**
+ * Find the enclosing class if the given line is inside a class or method docstring.
+ * Returns the class's qualified name (e.g., "OuterClass.InnerClass") or null.
+ */
+export function findEnclosingClassContext(
+  indexed: IndexedSymbol[],
+  hoverLine: number,
+  documentText?: string
+): string | null {
+  const lines = documentText?.split(/\r?\n/);
+
+  // Collect all class and method definitions that could own a docstring containing hoverLine
+  const candidates = indexed
+    .filter(
+      (s) =>
+        (s.kind === "class" || (s.kind === "def" && s.qualifiedName.includes("."))) &&
+        s.line < hoverLine &&
+        s.docstring // Must have a docstring
+    )
+    .sort((a, b) => b.line - a.line); // Most recent first
+
+  for (const sym of candidates) {
+    // If we have document text, compute exact docstring range
+    if (lines) {
+      const range = findDocstringRange(lines, sym.line);
+      if (range && hoverLine >= range.start && hoverLine <= range.end) {
+        if (sym.kind === "class") {
+          return sym.qualifiedName;
+        } else {
+          // Method - return the class part
+          const dot = sym.qualifiedName.lastIndexOf(".");
+          return dot > 0 ? sym.qualifiedName.slice(0, dot) : null;
+        }
+      }
+    } else {
+      // Fallback: estimate based on docstring line count
+      const docstringStartLine = sym.line + 1;
+      const docLines = sym.docstring!.split("\n").length;
+      const docstringEndLine = docstringStartLine + docLines + 2;
+
+      if (hoverLine >= docstringStartLine && hoverLine <= docstringEndLine) {
+        if (sym.kind === "class") {
+          return sym.qualifiedName;
+        } else {
+          const dot = sym.qualifiedName.lastIndexOf(".");
+          return dot > 0 ? sym.qualifiedName.slice(0, dot) : null;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
 function skipSpacesLeft(line: string, i: number): number {
   let j = i;
   while (j >= 0 && /\s/.test(line[j]!)) j--;
@@ -116,17 +239,31 @@ function pickLatestAtOrBefore(
   return sorted[0];
 }
 
+export interface HoverResolveOptions {
+  inference?: ReceiverInferenceContext;
+  /** Enclosing class context (e.g., from being inside a class/method docstring) */
+  enclosingClass?: string | null;
+}
+
 /**
  * Resolve which indexed symbol to show for hover: member chains (Type[...].method),
- * then optional label context for simple names.
+ * enclosing class context (for docstrings), then optional label context for simple names.
  */
 export function resolveIndexedSymbolForHover(
   indexed: IndexedSymbol[],
   lineText: string,
   range: Range,
   hoverLine: number,
-  inference?: ReceiverInferenceContext
+  optionsOrInference?: HoverResolveOptions | ReceiverInferenceContext
 ): IndexedSymbol | undefined {
+  // Support both old signature (inference only) and new options object
+  const options: HoverResolveOptions =
+    optionsOrInference && "currentUri" in optionsOrInference
+      ? { inference: optionsOrInference }
+      : (optionsOrInference as HoverResolveOptions) ?? {};
+
+  const { inference, enclosingClass } = options;
+
   const symbol = lineText.slice(range.start.character, range.end.character);
   if (!symbol) return undefined;
 
@@ -171,6 +308,25 @@ export function resolveIndexedSymbolForHover(
         if (relaxedInfHit) return relaxedInfHit;
       }
     }
+  }
+
+  // When inside a class/method docstring, prefer members of that class
+  if (enclosingClass && !receiver) {
+    const classQualified = `${enclosingClass}.${symbol}`;
+    const classMembers = indexed.filter(
+      (s) => s.qualifiedName === classQualified || s.qualifiedName.startsWith(`${classQualified}.`)
+    );
+    const classHit = pickLatestAtOrBefore(classMembers, hoverLine, currentFsPath);
+    if (classHit) return classHit;
+
+    // Also check for attributes/variables defined in the class
+    const classMembersBySimple = indexed.filter(
+      (s) =>
+        s.simpleName === symbol &&
+        (s.qualifiedName === classQualified || s.qualifiedName.startsWith(`${enclosingClass}.`))
+    );
+    const simpleHit = pickLatestAtOrBefore(classMembersBySimple, hoverLine, currentFsPath);
+    if (simpleHit) return simpleHit;
   }
 
   const labelCtx = lastLabelQualifiedBeforeLine(indexed, hoverLine);

@@ -17,7 +17,7 @@ import {
   scanQualifiedDefinitions,
   type IndexedSymbol,
 } from "./qualifiedDefinitions";
-import { resolveIndexedSymbolForHover } from "./hoverResolve";
+import { findEnclosingClassContext, resolveIndexedSymbolForHover } from "./hoverResolve";
 import { collectReceiverInferenceContext } from "./receiverInference";
 import { resolveDocUrl, searchFallbackUrl } from "./resolveDocUrl";
 import { registerRenpySignatureHelp } from "./signatureHelp";
@@ -228,12 +228,13 @@ export function activate(context: vscode.ExtensionContext): void {
           projectIndex.symbolsExceptCurrentFile(document.uri.fsPath)
         );
         const lineText = document.lineAt(position.line).text;
+        const enclosingClass = findEnclosingClassContext(mergedIndexed, position.line, fullText);
         const memberHit = resolveIndexedSymbolForHover(
           mergedIndexed,
           lineText,
           range,
           position.line,
-          inferenceCtx
+          { inference: inferenceCtx, enclosingClass }
         );
 
         let definitionUri = document.uri;
@@ -267,6 +268,17 @@ export function activate(context: vscode.ExtensionContext): void {
 
         const resolveCrossRef = createMergedCrossRefResolver(projectIndex, document);
 
+        // Determine enclosing class for cross-reference resolution in docstrings
+        // If viewing a class's docstring, refs like :func:`method` should resolve to ClassName.method
+        // If viewing a method's docstring, refs should resolve to sibling methods in the same class
+        let docstringClassContext: string | null = null;
+        if (indexedDef?.kind === "class") {
+          docstringClassContext = indexedDef.qualifiedName;
+        } else if (indexedDef?.qualifiedName?.includes(".")) {
+          const dot = indexedDef.qualifiedName.lastIndexOf(".");
+          docstringClassContext = indexedDef.qualifiedName.slice(0, dot);
+        }
+
         let localMd = "";
         let linesSplit = fullText.split(/\r?\n/);
         if (localDef && definitionUri.fsPath !== document.uri.fsPath) {
@@ -297,7 +309,7 @@ export function activate(context: vscode.ExtensionContext): void {
             preserveVariableCommentLines && localRaw ? localRaw.replace(/\n/g, "  \n") : localRaw;
           const docPart =
             preferLocal && localRawForMarkdown
-              ? formatDocstringToMarkdown(localRawForMarkdown, { resolveCrossRef })
+              ? formatDocstringToMarkdown(localRawForMarkdown, { resolveCrossRef, enclosingClass: docstringClassContext })
               : "";
           localMd = [sigBlock, docPart].filter(Boolean).join("\n\n");
         }
@@ -354,7 +366,7 @@ export function activate(context: vscode.ExtensionContext): void {
               : 0;
             const dedented = lines.map((l, i) => i === 0 ? l : l.slice(minIndent)).join('\n');
             
-            const formatted = formatDocstringToMarkdown(dedented, { resolveCrossRef });
+            const formatted = formatDocstringToMarkdown(dedented, { resolveCrossRef, enclosingClass: docstringClassContext });
             md.appendMarkdown(formatted);
           }
           

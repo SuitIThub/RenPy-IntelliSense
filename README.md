@@ -2,7 +2,7 @@
 
 [![Release workflow](https://github.com/SuitIThub/RenPy-IntelliSense/actions/workflows/release.yml/badge.svg)](https://github.com/SuitIThub/RenPy-IntelliSense/actions/workflows/release.yml)
 [![VS Code](https://img.shields.io/badge/VS%20Code-%5E1.85.0-007ACC?logo=visualstudiocode&logoColor=white)](https://code.visualstudio.com/)
-[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/Suit-Ji.renpy-intellisense?label=VS%20Marketplace&logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=Suit-Ji.renpy-intellisense)
+[![Visual Studio Marketplace](https://img.shields.io/badge/VS%20Marketplace-Suit--Ji.renpy--intellisense-007ACC?logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=Suit-Ji.renpy-intellisense)
 [![Open VSX](https://img.shields.io/open-vsx/v/Suit-Ji/renpy-intellisense?label=Open%20VSX&logo=openvsx)](https://open-vsx.org/extension/Suit-Ji/renpy-intellisense)
 [![GitHub release](https://img.shields.io/github/v/release/SuitIThub/RenPy-IntelliSense?logo=github&label=release)](https://github.com/SuitIThub/RenPy-IntelliSense/releases)
 
@@ -12,13 +12,13 @@ Licensed under the [MIT License](LICENSE). Release history: [CHANGELOG](CHANGELO
 
 ---
 
-## What's New in 1.2.0
+## What's New in 1.3.0
 
-- **Project-wide symbol resolution** with correct Ren'Py `$` local behavior (`$` assignments stay file-local; other definitions are available across files)
-- **Chained member resolution with receiver inference** (e.g. `storage.add_event(...)` resolves from assignments and return-type hints)
-- **Inheritance-aware method lookup** (subclass instances can resolve methods defined in superclasses)
-- **Improved hover UX** with kind-aware headers (e.g. `(method)`, `(class)`), larger clickable headers, clickable class hierarchy links, and clickable label hierarchy links
-- **Ren'Py-correct relative sublabel base tracking** (`label .child:` resolves against the latest previous non-relative label)
+- **Class-aware docstring cross-references**: `:func:`method`` in a class docstring automatically resolves to that class's method
+- **Flexible Sphinx role syntax**: Supports `:func:`get_name() -> str``, `:func:`add_event(event: :class:`Event`)`` with nested roles, and more
+- **Improved link format**: Only symbol names are clickable; parameters and return types stay as plain text with nested type links
+- **Link tooltips**: Hover over links to see `filename.rpy:line` instead of command URLs
+- **Better hover resolution**: Symbols in docstrings now correctly resolve to class members
 
 ---
 
@@ -82,8 +82,13 @@ Context-aware completions for:
 
 Use Sphinx-style roles in docstrings to create clickable links:
 - `:class:`ClassName`` - Link to a class
-- `:func:`function_name`` - Link to a function
+- `:func:`function_name`` or `:func:`function_name()`` - Link to a function
 - `:meth:`ClassName.method`` - Link to a method
+- `:attr:`attribute_name`` - Link to an attribute
+
+**Flexible syntax** - signatures are supported:
+- `:func:`get_type() -> str`` - only `get_type` is linked, `() -> str` shown as text
+- `:func:`add_event(event: :class:`Event`)`` - nested type references become separate links
 
 ---
 
@@ -201,9 +206,37 @@ def push_screen(self):
 
 **Ctrl+click** / **Cmd+click** links to jump to the definition.
 
+### Flexible Syntax
+
+Cross-references support various signature formats:
+
+| Syntax | Result |
+|--------|--------|
+| ```:func:`get_name` ``` | `get_name` (linked) |
+| ```:func:`get_name()` ``` | `get_name` (linked) + `()` |
+| ```:func:`get_name() -> str` ``` | `get_name` (linked) + `() -> str` |
+| ```:func:`add(event: :class:`Event`)` ``` | `add` (linked) + `(event: ` + `Event` (linked) + `)` |
+
+Only the symbol name becomes the link; parameters and return types are plain text with their own nested links.
+
+### Class-Aware Resolution
+
+Inside a class or method docstring, unqualified names automatically resolve to that class's members:
+
+```python
+class EventStorage:
+    """
+    Storage for events.
+    
+    Methods:
+    - :func:`add_event()` - adds an event   # Resolves to EventStorage.add_event
+    - :func:`get_events()` - retrieves all  # Resolves to EventStorage.get_events
+    """
+```
+
 ### Qualified Names
 
-For duplicate names, use the full path:
+For duplicate names or cross-class references, use the full path:
 
 | Pattern | Meaning |
 |---------|---------|

@@ -243,7 +243,15 @@ export function registerRenpyDocCompletions(projectIndex: ProjectIndex): vscode.
             const parts: string[] = [];
             if (sig) parts.push(["```python", sig, "```"].join("\n"));
             const ds = local.docstring?.trim();
-            if (ds) parts.push(formatDocstringToMarkdown(ds, { resolveCrossRef }));
+            // Determine enclosing class for cross-ref resolution
+            let enclosingClass: string | null = null;
+            if (local.kind === "class") {
+              enclosingClass = local.qualifiedName;
+            } else if (local.qualifiedName.includes(".")) {
+              const dot = local.qualifiedName.lastIndexOf(".");
+              enclosingClass = local.qualifiedName.slice(0, dot);
+            }
+            if (ds) parts.push(formatDocstringToMarkdown(ds, { resolveCrossRef, enclosingClass }));
             const doc = new vscode.MarkdownString(parts.join("\n\n"));
             doc.isTrusted = true;
             if (url) doc.appendMarkdown(`${parts.length ? "\n\n" : ""}[Ren'Py documentation](${url})`);
