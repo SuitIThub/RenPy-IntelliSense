@@ -5,6 +5,12 @@ All notable changes to **Ren'Py IntelliSense** are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-04-29
+
+### Fixed
+
+- **Docstring markdown rendering**: Docstrings from indented class/function definitions now render markdown correctly. The issue was that leading whitespace from source indentation was preserved, which prevented markdown headings (like `### Parameters:`) from rendering properly. Docstrings are now dedented before markdown processing.
+
 ## [1.2.0] - 2026-04-25
 
 ### Added

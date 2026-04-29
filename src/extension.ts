@@ -323,43 +323,61 @@ export function activate(context: vscode.ExtensionContext): void {
 
         const md = new vscode.MarkdownString();
         md.isTrusted = true;
+        
+        // Header
         if (localDef) {
-          const kindLabel = hoverKindLabel(localDef);
           const t = escapeMarkdownLinkLabel(symbol);
           const href = makeOpenDefinitionCommandLink(definitionUri, localDef.line);
-          const relPath = vscode.workspace
-            .asRelativePath(definitionUri, false)
-            .replace(/\\/g, "/");
-          const locLabel = escapeMarkdownLinkLabel(`${relPath}:${localDef.line + 1}`);
-          const headerLabel = escapeMarkdownLinkLabel(`(${kindLabel}) ${symbol}`);
-          md.appendMarkdown(`## [${headerLabel}](${href})\n\n<sub>${locLabel}</sub>\n\n`);
+          md.appendMarkdown(`### [${t}](${href})\n\n`);
         } else {
           md.appendMarkdown(`### ${symbol}\n\n`);
         }
-
-        if (localMd) {
-          md.appendMarkdown(localMd);
+        
+        // Signature code block + formatted docstring
+        if (localDef) {
+          const sig = extractDefinitionSignature(linesSplit, localDef.line, localDef.kind);
+          if (sig) {
+            md.appendMarkdown(`\`\`\`python\n${sig}\n\`\`\`\n\n`);
+          }
+          
+          const rawDoc = localDef.docstring?.trim();
+          if (rawDoc && preferLocal) {
+            // Dedent: remove common indentation (first line is already trimmed by extraction)
+            const lines = rawDoc.split('\n');
+            const linesToCheck = lines.slice(1).filter(l => l.trim().length > 0);
+            const minIndent = linesToCheck.length > 0 
+              ? linesToCheck.reduce((min, line) => {
+                  const match = line.match(/^(\s*)/);
+                  const indent = match ? match[1]!.length : 0;
+                  return Math.min(min, indent);
+                }, Infinity)
+              : 0;
+            const dedented = lines.map((l, i) => i === 0 ? l : l.slice(minIndent)).join('\n');
+            
+            const formatted = formatDocstringToMarkdown(dedented, { resolveCrossRef });
+            md.appendMarkdown(formatted);
+          }
+          
           if (indexedDef?.kind === "class") {
             appendClassHierarchyMarkdown(md, indexedDef, mergedIndexed);
           }
           if (indexedDef?.kind === "label") {
             appendLabelHierarchyMarkdown(md, indexedDef, mergedIndexed);
           }
+          
           if (docUrl && showOnlineWithLocal) {
             md.appendMarkdown("\n\n---\n\n");
-          } else if (!docUrl) {
-            md.appendMarkdown("\n");
           }
         }
 
-        if (docUrl && (!localMd || showOnlineWithLocal)) {
+        if (docUrl && (!(localDef?.docstring) || showOnlineWithLocal)) {
           if (onlineBody) {
             md.appendMarkdown(`${onlineBody}\n\n`);
-          } else if (fetchOnline && !localMd) {
+          } else if (fetchOnline && !localDef?.docstring) {
             md.appendMarkdown(`*Could not load summary from the documentation page.*\n\n`);
           }
           md.appendMarkdown(`[Ren'Py documentation](${docUrl})`);
-        } else if (!localMd && !docUrl) {
+        } else if (!localDef?.docstring && !docUrl) {
           md.appendMarkdown(
             `No local docstring and no Ren'Py index entry. [Search documentation](${searchFallbackUrl(
               symbol
