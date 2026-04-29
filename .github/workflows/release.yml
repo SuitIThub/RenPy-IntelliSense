@@ -1,5 +1,5 @@
 # Tagless release: runs on every push to the default branch, or manually (Actions → Release → Run workflow).
-# Bump "version" in package.json when you want a new release; the gate skips if tag v<version> already exists.
+# Bump "version" in packages/client/package.json when you want a new release; the gate skips if tag v<version> already exists.
 # Pipeline: gate → build → then in parallel:
 #   release-github (GITHUB_TOKEN only) | verify-vscode | verify-openvsx
 # → then (publish-vscode | publish-openvsx) after each verify passes.
@@ -9,7 +9,7 @@
 #                https://code.visualstudio.com/api/working-with-extensions/publishing-extension#publishing-extensions
 #   OVSX_PAT   — Open VSX access token from https://open-vsx.org/ (Profile → Access Tokens)
 #
-# Ensure package.json "publisher" matches your VS Marketplace id and Open VSX namespace (e.g. Suit-Ji).
+# Ensure packages/client/package.json "publisher" matches your VS Marketplace id and Open VSX namespace (e.g. Suit-Ji).
 # Adjust `branches` below if your default branch is not main/master.
 
 name: Release
@@ -47,14 +47,15 @@ jobs:
         id: meta
         run: |
           set -e
-          VERSION="$(node -p "require('./package.json').version")"
-          PUBLISHER="$(node -p "require('./package.json').publisher")"
+          # Read version and publisher from the client package (the one that gets published)
+          VERSION="$(node -p "require('./packages/client/package.json').version")"
+          PUBLISHER="$(node -p "require('./packages/client/package.json').publisher")"
           if [ -z "$VERSION" ]; then
-            echo "::error::package.json version is empty"
+            echo "::error::packages/client/package.json version is empty"
             exit 1
           fi
           if [ -z "$PUBLISHER" ]; then
-            echo "::error::package.json publisher is empty"
+            echo "::error::packages/client/package.json publisher is empty"
             exit 1
           fi
           TAG="v${VERSION}"
@@ -82,20 +83,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
-      - name: Compile
-        run: npm run compile
+      - name: Compile all packages
+        run: pnpm run compile
+
+      - name: Copy data files to server
+        run: |
+          mkdir -p packages/server/out/data
+          cp data/doc-index.json packages/server/out/data/
+
+      - name: Bundle server into client package
+        run: |
+          # Copy server output
+          mkdir -p packages/client/server/out
+          cp -r packages/server/out/* packages/client/server/out/
+          
+          # Copy shared output (server depends on it)
+          mkdir -p packages/client/server/node_modules/@renpy-intellisense/shared/out
+          cp -r packages/shared/out/* packages/client/server/node_modules/@renpy-intellisense/shared/out/
+          cp packages/shared/package.json packages/client/server/node_modules/@renpy-intellisense/shared/
+          
+          # Copy server runtime dependencies
+          cp -r packages/server/node_modules/* packages/client/server/node_modules/ 2>/dev/null || true
+
+      - name: Install client dependencies for bundling
+        working-directory: packages/client
+        run: |
+          rm -rf node_modules package-lock.json
+          npm install --omit=dev --ignore-scripts
 
       - name: Package .vsix
-        run: npx --yes @vscode/vsce package --out extension.vsix
+        working-directory: packages/client
+        run: npx --yes @vscode/vsce package --out ../../extension.vsix
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v4

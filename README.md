@@ -224,17 +224,80 @@ The extension indexes all `.rpy` / `.rpym` files in your workspace. The index up
 
 ---
 
+### Go to Definition
+
+Press **F12** or **Ctrl+Click** on any symbol to jump to its definition. Works across files in your workspace.
+
+### Find All References
+
+Press **Shift+F12** to find all usages of a symbol across your project.
+
+### Outline View
+
+The sidebar Outline panel shows all symbols in the current file:
+- Classes, functions, and methods
+- Labels and screens
+- Transforms and images
+- Variables and constants
+
+---
+
 ## For Developers
+
+### Architecture
+
+This extension is built as a **Language Server Protocol (LSP)** implementation, providing:
+
+- **Editor-agnostic**: The server can be used with any LSP-compatible editor
+- **Better performance**: Incremental parsing and separate process
+- **Maintainable**: Clear separation between client (VS Code) and server logic
 
 ### Building and Installing
 
-1. Install dependencies: `npm install`
-2. Compile: `npm run compile`
-3. Regenerate the API index (optional): `npm run generate-index`
-4. Press **F5** to run the extension, or package with `@vscode/vsce`
+This is a pnpm monorepo with three packages:
+
+```
+packages/
+  shared/    # Shared types and constants
+  server/    # Language Server implementation
+  client/    # VS Code client extension
+```
+
+**Setup:**
+
+1. Install pnpm: `npm install -g pnpm`
+2. Install dependencies: `pnpm install`
+3. Compile all packages: `pnpm run compile`
+4. Regenerate the API index (optional): `npm run generate-index`
+5. Press **F5** to run the extension in development mode
+
+**Packaging:**
+
+```bash
+# Package for distribution
+pnpm run compile
+cd packages/client
+npx @vscode/vsce package
+```
 
 ### Project Structure
 
-- `src/` - TypeScript source files
-- `data/doc-index.json` - Bundled Ren'Py API index
-- `scripts/` - Build scripts for index generation
+```
+packages/
+  shared/src/           # Shared types (IndexedSymbol, DefKind, etc.)
+  server/src/
+    server.ts           # LSP server entry point
+    analysis/           # Symbol scanning, inference, docstring extraction
+    features/           # LSP feature handlers (hover, completion, etc.)
+    data/               # ATL/screen keywords, doc links
+  client/src/
+    extension.ts        # VS Code client
+data/
+  doc-index.json        # Bundled Ren'Py API index
+scripts/
+  generate-index.mjs    # Index generation script
+```
+
+### Legacy Source
+
+The original single-package source is preserved in `src/` for reference during migration.

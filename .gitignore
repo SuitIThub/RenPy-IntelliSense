@@ -1,3 +1,23 @@
 node_modules/
 out/
 *.vsix
+.pnpm-store/
+pnpm-lock.yaml
+
+# Build outputs
+packages/*/out/
+packages/**/out/
+
+# Bundled server in client (created during CI packaging)
+packages/client/server/
+
+# Generated during VSIX build (npm install in client)
+packages/client/package-lock.json
+
+# Editor
+.idea/
+*.swp
+*.swo
+
+# Temp files
+temp_vsix/

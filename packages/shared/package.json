@@ -1,0 +1,14 @@
+{
+  "name": "@renpy-intellisense/shared",
+  "version": "1.2.0",
+  "description": "Shared types and utilities for Ren'Py Language Server",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0"
+  }
+}

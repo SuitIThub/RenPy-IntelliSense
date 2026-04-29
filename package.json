@@ -1,88 +1,16 @@
 {
-  "name": "renpy-intellisense",
-  "displayName": "Ren'Py IntelliSense",
-  "description": "Shows Ren'Py official documentation in hovers for .rpy / .rpym code.",
+  "name": "renpy-intellisense-monorepo",
   "version": "1.2.0",
-  "publisher": "Suit-Ji",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/SuitIThub/RenPy-IntelliSense.git"
-  },
-  "engines": {
-    "vscode": "^1.85.0"
-  },
-  "categories": [
-    "Other"
-  ],
-  "activationEvents": [
-    "onLanguage:renpy",
-    "workspaceContains:**/*.rpy",
-    "workspaceContains:**/*.rpym"
-  ],
-  "main": "./out/extension.js",
-  "icon": "Ren'Py.png",
-  "files": [
-    "out/**/*.js",
-    "data/doc-index.json",
-    "Ren'Py.png",
-    "LICENSE",
-    "CHANGELOG.md"
-  ],
-  "contributes": {
-    "languages": [
-      {
-        "id": "renpy",
-        "aliases": ["Ren'Py", "RenPy"],
-        "extensions": [".rpy", ".rpym"]
-      }
-    ],
-    "commands": [
-      {
-        "command": "renpyDocHover.openDefinition",
-        "title": "Ren'Py Doc Hover: Open cross-reference at line"
-      },
-      {
-        "command": "renpyDocHover.applyWorkspaceRecommendations",
-        "title": "Ren'Py IntelliSense: Apply recommended workspace settings"
-      }
-    ],
-    "configuration": {
-      "title": "Ren'Py Documentation Hover",
-      "properties": {
-        "renpyDocHover.fetchOnline": {
-          "type": "boolean",
-          "default": true,
-          "description": "Fetch documentation text from https://www.renpy.org/doc/html/ when hovering (requires network). If false, only shows title and doc link from the index."
-        },
-        "renpyDocHover.cacheSize": {
-          "type": "number",
-          "default": 400,
-          "minimum": 0,
-          "description": "Maximum number of fetched doc pages to keep in memory (0 disables caching)."
-        },
-        "renpyDocHover.preferLocalDocstring": {
-          "type": "boolean",
-          "default": true,
-          "description": "Show docstrings from your own definitions (triple-quoted or # comment blocks) in hovers when present."
-        },
-        "renpyDocHover.showOnlineDocsWithLocal": {
-          "type": "boolean",
-          "default": true,
-          "description": "When a local docstring exists and the symbol is also in the Ren'Py manual, append the online excerpt below a separator."
-        }
-      }
-    }
-  },
+  "description": "Ren'Py Language Server - monorepo",
+  "private": true,
   "scripts": {
-    "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "generate-index": "node scripts/generate-index.mjs"
+    "compile": "pnpm -r compile",
+    "watch": "pnpm -r --parallel watch",
+    "generate-index": "node scripts/generate-index.mjs",
+    "install-all": "pnpm install",
+    "package": "powershell -ExecutionPolicy Bypass -File scripts/build-vsix.ps1"
   },
   "devDependencies": {
-    "@types/node": "^20.10.0",
-    "@types/vscode": "^1.85.0",
     "typescript": "^5.3.0"
   }
 }

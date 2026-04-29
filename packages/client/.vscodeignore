@@ -1,0 +1,22 @@
+# Source files (only ship compiled output)
+src/**
+**/*.ts
+!**/*.d.ts
+
+# TypeScript config
+tsconfig.json
+
+# Dev/test files
+.vscode-test/**
+**/*.map
+
+# Git
+.git/**
+.gitignore
+
+# Build artifacts we don't need
+*.vsix
+
+# pnpm artifacts (we use npm install for bundling)
+node_modules/.pnpm/**
+node_modules/.modules.yaml

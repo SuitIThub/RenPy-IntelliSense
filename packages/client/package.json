@@ -1,0 +1,89 @@
+{
+  "name": "renpy-intellisense",
+  "displayName": "Ren'Py IntelliSense",
+  "description": "Language Server for Ren'Py - hovers, completions, definitions, and more for .rpy / .rpym files",
+  "version": "1.3.0",
+  "publisher": "Suit-Ji",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SuitIThub/RenPy-IntelliSense.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "activationEvents": [
+    "onLanguage:renpy",
+    "workspaceContains:**/*.rpy",
+    "workspaceContains:**/*.rpym"
+  ],
+  "main": "./out/extension.js",
+  "icon": "icon.png",
+  "contributes": {
+    "languages": [
+      {
+        "id": "renpy",
+        "aliases": ["Ren'Py", "RenPy"],
+        "extensions": [".rpy", ".rpym"]
+      }
+    ],
+    "commands": [
+      {
+        "command": "renpyDocHover.applyWorkspaceRecommendations",
+        "title": "Ren'Py IntelliSense: Apply recommended workspace settings"
+      }
+    ],
+    "configuration": {
+      "title": "Ren'Py IntelliSense",
+      "properties": {
+        "renpyDocHover.fetchOnline": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fetch documentation text from https://www.renpy.org/doc/html/ when hovering (requires network). If false, only shows title and doc link from the index."
+        },
+        "renpyDocHover.cacheSize": {
+          "type": "number",
+          "default": 400,
+          "minimum": 0,
+          "description": "Maximum number of fetched doc pages to keep in memory (0 disables caching)."
+        },
+        "renpyDocHover.preferLocalDocstring": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show docstrings from your own definitions (triple-quoted or # comment blocks) in hovers when present."
+        },
+        "renpyDocHover.showOnlineDocsWithLocal": {
+          "type": "boolean",
+          "default": true,
+          "description": "When a local docstring exists and the symbol is also in the Ren'Py manual, append the online excerpt below a separator."
+        },
+        "renpyDocHover.complementMode": {
+          "type": "boolean",
+          "default": false,
+          "description": "Complement mode: Only show information that other extensions (like Ren'Py Language) don't provide. This avoids duplicate hovers. For built-in symbols: only online docs. For classes/functions/labels: only hierarchy info and cross-references. For variables: full docstrings (since other extensions don't support variable docstrings)."
+        },
+        "renpyDocHover.complementModeDisableDefinition": {
+          "type": "boolean",
+          "default": true,
+          "description": "When complement mode is enabled, also disable the Go to Definition provider to avoid duplicate definition results with other extensions."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}
